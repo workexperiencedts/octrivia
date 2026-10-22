@@ -1659,61 +1659,135 @@ function hitFx(gunId, x, y, view, theme) {
 }
 
 /* =====================================================================
-   TRIVIA: every barrel gets a place-name sign, and a clue says which place
-   the octopus is hiding in. Chad Mode (the harbour) uses world cities;
-   Demon Time (the hell world) uses the hottest, most fiery places on Earth.
-   Each place has three clues: [tier 0, tier 1, tier 2], getting harder.
-   The tier goes up with the keys you hold, and the boss always uses tier 2.
+   TRIVIA: every barrel gets a COUNTRY sign, and a clue says which country
+   the octopus is hiding in.
+   Chad Mode (the harbour): famous landmarks, food, flags, sport and culture.
+   Demon Time (the hell world): volcanoes, deserts, heat records and fire,
+   still answered with the country they are in.
+   Each country has three clues: [easy, medium, hard]. The difficulty goes up
+   with the keys you hold, and the boss always asks the hard ones.
+   Rules every clue follows (checked by hand and by the test script):
+   - it never names its own country or uses the country's adjective;
+   - it fits ONLY its own country, among every country in the same list and
+     (for hard clues) in both lists, since the boss mixes them;
+   - capital letters, digits and . , ' ! ? - ( ) only (the pixel font has no others).
    ===================================================================== */
 const TRIVIA = {
   chad: [
-    { name: 'LONDON', clues: ['BIG BEN CHIMES OVER THE RIVER THAMES HERE', 'THE FIRST CITY TO HOST THE SUMMER OLYMPICS THREE TIMES', 'ITS UNDERGROUND, OPENED IN 1863, WAS THE FIRST IN THE WORLD'] },
-    { name: 'PARIS', clues: ['A 330 METRE IRON TOWER WAS BUILT HERE FOR A WORLD FAIR', 'THE MONA LISA HANGS IN A MUSEUM IN THIS CITY', 'NOTRE-DAME CATHEDRAL SITS ON AN ISLAND IN ITS RIVER'] },
-    { name: 'ROME', clues: ['GLADIATORS ONCE FOUGHT IN THE COLOSSEUM HERE', 'A WHOLE COUNTRY, VATICAN CITY, SITS INSIDE THIS CITY', 'THE ETERNAL CITY, SAID TO BE BUILT ON SEVEN HILLS'] },
-    { name: 'TOKYO', clues: ['THE BUSY SHIBUYA SCRAMBLE CROSSING IS HERE', 'IT HOSTED THE 2020 OLYMPICS, A YEAR LATE, IN 2021', 'BEFORE 1868 THIS CAPITAL WAS CALLED EDO'] },
-    { name: 'SYDNEY', clues: ['ITS OPERA HOUSE HAS A ROOF SHAPED LIKE SAILS', 'BONDI BEACH IS IN THIS CITY', 'THE BIGGEST CITY IN AUSTRALIA, BUT NOT ITS CAPITAL'] },
-    { name: 'NEW YORK', clues: ['THE STATUE OF LIBERTY GREETS SHIPS IN ITS HARBOUR', 'NICKNAMED THE BIG APPLE', 'IT WAS CALLED NEW AMSTERDAM UNTIL 1664'] },
-    { name: 'CAIRO', clues: ['THE GREAT PYRAMIDS OF GIZA ARE ON ITS EDGE', 'A CAPITAL CITY ON THE BANKS OF THE NILE', "ITS NAME MEANS 'THE VICTORIOUS' IN ARABIC"] },
-    { name: 'VENICE', clues: ['PEOPLE GET AROUND THIS CITY BY GONDOLA ON CANALS', 'THIS ITALIAN CITY IS BUILT ON 118 SMALL ISLANDS', 'THE EXPLORER MARCO POLO WAS BORN HERE'] },
-    { name: 'RIO', clues: ['A GIANT STATUE OF CHRIST THE REDEEMER LOOKS OVER IT', 'COPACABANA BEACH AND A HUGE CARNIVAL ARE HERE', 'THE FIRST SOUTH AMERICAN CITY TO HOST THE OLYMPICS'] },
-    { name: 'DUBAI', clues: ['THE BURJ KHALIFA, THE TALLEST BUILDING ON EARTH, IS HERE', 'IT BUILT ISLANDS IN THE SEA SHAPED LIKE PALM TREES', 'SOME OF ITS POLICE CARS ARE LAMBORGHINIS AND BUGATTIS'] },
-    { name: 'BARCELONA', clues: ['MESSI PLAYED FOOTBALL HERE FOR 17 YEARS', 'THE SAGRADA FAMILIA CHURCH HAS BEEN BUILT HERE SINCE 1882', 'ARCHITECT ANTONI GAUDI FILLED THIS CITY WITH HIS BUILDINGS'] },
-    { name: 'LIVERPOOL', clues: ['THE BEATLES CAME FROM THIS PORT CITY', 'THE MERSEY FERRY CROSSES THE RIVER HERE', 'THE TITANIC WAS REGISTERED IN THIS PORT'] },
-    { name: 'ATHENS', clues: ['THE PARTHENON STANDS ON THE ACROPOLIS HERE', 'THE FIRST MODERN OLYMPICS WERE HELD HERE IN 1896', 'IT IS NAMED AFTER THE GREEK GODDESS OF WISDOM'] },
-    { name: 'MUMBAI', clues: ['THE HOME OF BOLLYWOOD FILMS', 'THE GATEWAY OF INDIA ARCH FACES THE SEA HERE', 'INDIA\'S BIGGEST CITY, CALLED BOMBAY UNTIL 1995'] },
-    { name: 'EDINBURGH', clues: ['A CASTLE SITS ON AN OLD VOLCANO IN THIS CAPITAL', 'THE FIRST HARRY POTTER BOOK WAS PARTLY WRITTEN IN CAFES HERE', 'THE WORLD\'S BIGGEST ARTS FESTIVAL, THE FRINGE, HAPPENS HERE'] },
-    { name: 'AMSTERDAM', clues: ['A CITY OF CANALS WITH MORE BIKES THAN PEOPLE', "ANNE FRANK'S HIDING PLACE IS NOW A MUSEUM HERE", 'MUCH OF THIS CITY STANDS ON WOODEN POLES SUNK IN MUD'] },
+    { name: "FRANCE", clues: ["THE EIFFEL TOWER STANDS IN THIS COUNTRY'S CAPITAL", "THE MONA LISA HANGS IN THE LOUVRE IN THIS COUNTRY", "THE BASTILLE PRISON WAS STORMED HERE ON 14 JULY 1789"] },
+    { name: "ITALY", clues: ["A BOOT-SHAPED COUNTRY FAMOUS FOR PIZZA AND PASTA", "THE LEANING TOWER OF PISA IS IN THIS COUNTRY", "SAN MARINO AND VATICAN CITY ARE COUNTRIES INSIDE THIS ONE"] },
+    { name: "JAPAN", clues: ["SUSHI, ANIME AND BULLET TRAINS ALL COME FROM HERE", "ITS FLAG IS A RED CIRCLE ON A PLAIN WHITE BACKGROUND", "ITS OWN NAME FOR ITSELF, NIHON, MEANS 'ORIGIN OF THE SUN'"] },
+    { name: "CHINA", clues: ["THE GREAT WALL WAS BUILT ACROSS THIS COUNTRY", "GIANT PANDAS LIVE IN THE WILD ONLY IN THIS COUNTRY", "THE TERRACOTTA ARMY WAS FOUND BURIED HERE IN 1974"] },
+    { name: "EGYPT", clues: ["THE GREAT PYRAMIDS OF GIZA ARE IN THIS COUNTRY", "TUTANKHAMUN'S TOMB WAS FOUND HERE IN 1922", "THE SUEZ CANAL CUTS THROUGH THIS COUNTRY"] },
+    { name: "USA", clues: ["THE STATUE OF LIBERTY STANDS IN THIS COUNTRY", "IT HAS 50 STATES AND 50 STARS ON ITS FLAG", "IT BOUGHT ALASKA FROM RUSSIA IN 1867"] },
+    { name: "UK", clues: ["BIG BEN AND BUCKINGHAM PALACE ARE IN THIS COUNTRY", "ITS FLAG IS NICKNAMED THE UNION JACK", "ITS KINGS AND QUEENS ARE CROWNED IN WESTMINSTER ABBEY"] },
+    { name: "AUSTRALIA", clues: ["KANGAROOS AND KOALAS LIVE IN THE WILD HERE", "THE SYDNEY OPERA HOUSE IS IN THIS COUNTRY", "ITS CAPITAL, CANBERRA, WAS BUILT AS A COMPROMISE BETWEEN TWO CITIES"] },
+    { name: "BRAZIL", clues: ["THE CHRIST THE REDEEMER STATUE LOOKS OVER RIO HERE", "PELE, WHO WON THREE WORLD CUPS, PLAYED FOR THIS COUNTRY", "THE ONLY COUNTRY IN SOUTH AMERICA WHERE PORTUGUESE IS SPOKEN"] },
+    { name: "INDIA", clues: ["THE TAJ MAHAL STANDS IN THIS COUNTRY", "BOLLYWOOD FILMS ARE MADE IN THIS COUNTRY", "IN 2023 IT OVERTOOK CHINA AS THE COUNTRY WITH THE MOST PEOPLE"] },
+    { name: "MEXICO", clues: ["TACOS, SOMBREROS AND MARIACHI BANDS COME FROM HERE", "THE DAY OF THE DEAD IS ITS MOST FAMOUS FESTIVAL", "THE MAYAN PYRAMID OF CHICHEN ITZA IS IN THIS COUNTRY"] },
+    { name: "CANADA", clues: ["A RED MAPLE LEAF IS ON ITS FLAG", "IT HAS THE LONGEST COASTLINE OF ANY COUNTRY", "IT SHARES THE LONGEST LAND BORDER IN THE WORLD WITH THE USA"] },
+    { name: "RUSSIA", clues: ["THE BIGGEST COUNTRY IN THE WORLD BY AREA", "RED SQUARE AND THE KREMLIN ARE IN ITS CAPITAL", "IT STRETCHES ACROSS 11 TIME ZONES"] },
+    { name: "SPAIN", clues: ["FLAMENCO DANCING AND PAELLA COME FROM HERE", "REAL MADRID AND BARCELONA ARE ITS BIGGEST FOOTBALL CLUBS", "THE SAGRADA FAMILIA CHURCH HAS BEEN BUILT HERE SINCE 1882"] },
+    { name: "GERMANY", clues: ["BRATWURST, PRETZELS AND OKTOBERFEST COME FROM HERE", "A WALL SPLIT ITS CAPITAL IN TWO UNTIL 1989", "NEUSCHWANSTEIN, THE FAIRY-TALE CASTLE, IS IN THIS COUNTRY"] },
+    { name: "GREECE", clues: ["THE PARTHENON STANDS ON THE ACROPOLIS IN THIS COUNTRY", "THE ANCIENT OLYMPIC GAMES BEGAN HERE", "IT HAS ABOUT 6,000 ISLANDS, INCLUDING CRETE AND CORFU"] },
+    { name: "NETHERLANDS", clues: ["WINDMILLS, TULIPS AND WOODEN CLOGS COME FROM HERE", "ABOUT A QUARTER OF THIS COUNTRY IS BELOW SEA LEVEL", "ITS CAPITAL IS AMSTERDAM, BUT ITS GOVERNMENT SITS IN THE HAGUE"] },
+    { name: "SWITZERLAND", clues: ["FAMOUS FOR CHOCOLATE, WATCHES AND CHEESE WITH HOLES", "IT HAS FOUR NATIONAL LANGUAGES, ONE OF THEM ROMANSH", "THE RED CROSS WAS FOUNDED IN GENEVA, IN THIS COUNTRY, IN 1863"] },
+    { name: "NORWAY", clues: ["EVERY CHRISTMAS IT GIVES LONDON THE TREE IN TRAFALGAR SQUARE", "THE NOBEL PEACE PRIZE IS HANDED OUT IN ITS CAPITAL, OSLO", "ROALD AMUNDSEN, FIRST TO THE SOUTH POLE, CAME FROM HERE"] },
+    { name: "SWEDEN", clues: ["IKEA AND THE POP BAND ABBA COME FROM THIS COUNTRY", "MOST NOBEL PRIZES ARE HANDED OUT IN ITS CAPITAL, STOCKHOLM", "MINECRAFT WAS FIRST MADE BY A PROGRAMMER FROM HERE"] },
+    { name: "IRELAND", clues: ["ST PATRICK IS ITS PATRON SAINT AND THE SHAMROCK ITS SYMBOL", "ITS NICKNAME IS THE EMERALD ISLE", "THE BOOK OF KELLS IS KEPT AT TRINITY COLLEGE IN ITS CAPITAL"] },
+    { name: "PERU", clues: ["MACHU PICCHU, THE LOST CITY OF THE INCAS, IS HERE", "PADDINGTON BEAR'S STORY BEGINS IN THE JUNGLES OF THIS COUNTRY", "LAKE TITICACA SITS ON ITS BORDER WITH BOLIVIA"] },
+    { name: "ARGENTINA", clues: ["LIONEL MESSI WON THE 2022 WORLD CUP PLAYING FOR THIS COUNTRY", "THE TANGO WAS BORN IN ITS CAPITAL, BUENOS AIRES", "DIEGO MARADONA'S 'HAND OF GOD' GOAL BEAT ENGLAND FOR IT IN 1986"] },
+    { name: "KENYA", clues: ["THE MAASAI MARA SAFARI PARK IS IN THIS COUNTRY", "ITS CAPITAL CITY IS NAIROBI", "MARATHON STAR ELIUD KIPCHOGE COMES FROM HERE"] },
+    { name: "SOUTH AFRICA", clues: ["TABLE MOUNTAIN LOOKS OVER CAPE TOWN IN THIS COUNTRY", "NELSON MANDELA WAS ITS FIRST BLACK PRESIDENT", "IT HAS THREE CAPITAL CITIES, ONE OF THEM PRETORIA"] },
+    { name: "MOROCCO", clues: ["MARRAKESH AND ITS BUSY MARKETS ARE IN THIS COUNTRY", "IT IS ONLY 14 KM FROM SPAIN, ACROSS THE STRAIT OF GIBRALTAR", "THE FIRST AFRICAN TEAM TO REACH A WORLD CUP SEMI-FINAL, IN 2022"] },
+    { name: "TURKEY", clues: ["THE CITY OF ISTANBUL IS SPLIT BETWEEN EUROPE AND ASIA HERE", "HOT-AIR BALLOONS FLOAT OVER THE ROCKS OF CAPPADOCIA HERE", "ITS CAPITAL IS ANKARA, NOT ITS BIGGEST CITY, ISTANBUL"] },
+    { name: "THAILAND", clues: ["BANGKOK IS THE CAPITAL OF THIS COUNTRY", "THE ONLY COUNTRY IN SOUTHEAST ASIA NEVER RULED BY EUROPEANS", "UNTIL 1939 THIS COUNTRY WAS CALLED SIAM"] },
+    { name: "SOUTH KOREA", clues: ["K-POP BANDS LIKE BTS COME FROM THIS COUNTRY", "SAMSUNG AND HYUNDAI COME FROM THIS COUNTRY", "ITS CAPITAL, SEOUL, HOSTED THE 1988 OLYMPICS"] },
+    { name: "NEW ZEALAND", clues: ["THE LORD OF THE RINGS FILMS WERE SHOT IN THIS COUNTRY", "ITS RUGBY TEAM, THE ALL BLACKS, PERFORM THE HAKA", "THE FIRST COUNTRY TO GIVE WOMEN THE VOTE, IN 1893"] },
+    { name: "PORTUGAL", clues: ["CRISTIANO RONALDO COMES FROM THIS COUNTRY", "YELLOW TRAMS CLIMB THE HILLS OF ITS CAPITAL, LISBON", "ITS ALLIANCE WITH ENGLAND, FROM 1373, IS THE OLDEST STILL GOING"] },
+    { name: "JAMAICA", clues: ["USAIN BOLT, THE FASTEST MAN EVER TIMED, COMES FROM HERE", "BOB MARLEY AND REGGAE MUSIC COME FROM THIS ISLAND", "ITS 1988 OLYMPIC BOBSLEIGH TEAM INSPIRED THE FILM COOL RUNNINGS"] },
+    { name: "CUBA", clues: ["OLD 1950S CARS STILL CRUISE THE STREETS OF HAVANA HERE", "THE BIGGEST ISLAND IN THE CARIBBEAN", "FIDEL CASTRO LED THIS COUNTRY FOR ALMOST 50 YEARS"] },
+    { name: "NIGERIA", clues: ["MORE PEOPLE LIVE HERE THAN IN ANY OTHER AFRICAN COUNTRY", "ITS FILM INDUSTRY IS NICKNAMED NOLLYWOOD", "ITS BIGGEST CITY IS LAGOS, BUT ITS CAPITAL IS ABUJA"] },
+    { name: "BELGIUM", clues: ["FAMOUS FOR WAFFLES, CHOCOLATE AND CHIPS WITH MAYO", "THE EUROPEAN UNION IS RUN FROM ITS CAPITAL, BRUSSELS", "TINTIN AND THE SMURFS WERE BOTH CREATED HERE"] },
+    { name: "DENMARK", clues: ["LEGO WAS INVENTED IN THIS COUNTRY", "THE LITTLE MERMAID STATUE SITS IN ITS CAPITAL, COPENHAGEN", "ITS RED AND WHITE FLAG IS THE OLDEST STILL IN USE"] },
+    { name: "FINLAND", clues: ["SANTA CLAUS VILLAGE, IN LAPLAND, IS IN THIS COUNTRY", "ANGRY BIRDS AND NOKIA PHONES COME FROM HERE", "IT IS CALLED THE LAND OF A THOUSAND LAKES, BUT HAS ABOUT 188,000"] },
+    { name: "AUSTRIA", clues: ["MOZART WAS BORN IN SALZBURG, IN THIS COUNTRY", "THE SOUND OF MUSIC IS SET IN THIS COUNTRY", "ITS CAPITAL, VIENNA, IS FAMOUS FOR WALTZES AND SACHERTORTE"] },
+    { name: "POLAND", clues: ["MARIE CURIE WAS BORN IN WARSAW, IN THIS COUNTRY", "PIEROGI DUMPLINGS ARE ITS FAMOUS DISH", "COPERNICUS, WHO SAID THE EARTH GOES ROUND THE SUN, WAS FROM HERE"] },
+    { name: "CROATIA", clues: ["DUBROVNIK, A FILMING SPOT FOR GAME OF THRONES, IS HERE", "ITS FOOTBALL SHIRT HAS RED AND WHITE CHECKS", "THE NECKTIE, OR CRAVAT, IS NAMED AFTER SOLDIERS FROM HERE"] },
+    { name: "VIETNAM", clues: ["THE LIMESTONE ISLANDS OF HA LONG BAY ARE IN THIS COUNTRY", "PHO NOODLE SOUP IS ITS BEST-KNOWN DISH", "SON DOONG, THE BIGGEST CAVE ON EARTH, IS HERE"] },
+    { name: "COLOMBIA", clues: ["THE SINGER SHAKIRA COMES FROM THIS COUNTRY", "THE ONLY SOUTH AMERICAN COUNTRY WITH PACIFIC AND CARIBBEAN COASTS", "IT IS NAMED AFTER THE EXPLORER CHRISTOPHER COLUMBUS"] },
+    { name: "CAMBODIA", clues: ["ANGKOR WAT, THE BIGGEST RELIGIOUS BUILDING ON EARTH, IS HERE", "A PICTURE OF ANGKOR WAT IS ON ITS NATIONAL FLAG", "ITS CAPITAL CITY IS PHNOM PENH"] },
+    { name: "JORDAN", clues: ["THE ROSE-RED CITY OF PETRA IS CARVED INTO ITS CLIFFS", "ITS CAPITAL CITY IS AMMAN", "WADI RUM HERE STOOD IN FOR MARS IN THE FILM THE MARTIAN"] },
+    { name: "NEPAL", clues: ["MOST CLIMBERS SET OFF UP MOUNT EVEREST FROM THIS COUNTRY", "ITS FLAG IS THE ONLY NATIONAL FLAG THAT IS NOT A RECTANGLE", "THE BUDDHA WAS BORN AT LUMBINI, IN THIS COUNTRY"] },
+    { name: "SINGAPORE", clues: ["MARINA BAY SANDS, A 'SHIP' ON TOP OF THREE TOWERS, IS HERE", "SELLING CHEWING GUM IS BANNED IN THIS CITY-COUNTRY", "ITS NAME MEANS 'LION CITY'"] },
+    { name: "UAE", clues: ["THE BURJ KHALIFA, THE TALLEST BUILDING ON EARTH, IS HERE", "DUBAI AND ABU DHABI ARE IN THIS COUNTRY", "IT IS MADE UP OF SEVEN EMIRATES"] },
+    { name: "HUNGARY", clues: ["GOULASH IS ITS FAMOUS NATIONAL DISH", "THE RUBIK'S CUBE WAS INVENTED HERE", "ITS CAPITAL JOINED TWO CITIES, BUDA AND PEST, ACROSS THE DANUBE"] },
+    { name: "MONGOLIA", clues: ["GENGHIS KHAN BUILT HIS HUGE EMPIRE FROM THIS COUNTRY", "MANY PEOPLE HERE STILL LIVE IN ROUND TENTS CALLED GERS", "THE LEAST CROWDED COUNTRY ON EARTH, FOR PEOPLE PER SQUARE KM"] },
+    { name: "ECUADOR", clues: ["THE GALAPAGOS ISLANDS, HOME OF GIANT TORTOISES, BELONG TO IT", "ITS NAME IS THE SPANISH WORD FOR THE EQUATOR", "PANAMA HATS ARE ACTUALLY MADE IN THIS COUNTRY"] },
+    { name: "MADAGASCAR", clues: ["LEMURS LIVE IN THE WILD ONLY ON THIS ISLAND COUNTRY", "THE BIGGEST ISLAND IN AFRICA", "ITS AVENUE OF THE BAOBABS IS LINED WITH GIANT TREES"] },
   ],
   demon: [
-    { name: 'SAHARA', clues: ['THE BIGGEST HOT DESERT ON EARTH', 'THIS DESERT COVERS MOST OF NORTH AFRICA', "ITS NAME SIMPLY MEANS 'DESERT' IN ARABIC"] },
-    { name: 'VESUVIUS', clues: ['THE VOLCANO THAT BURIED POMPEII', 'THE VOLCANO THAT LOOMS OVER THE ITALIAN CITY OF NAPLES', 'ITS FAMOUS ERUPTION HAPPENED IN THE YEAR 79 AD'] },
-    { name: 'DEATH VALLEY', clues: ['THE HOTTEST AIR EVER MEASURED, 56.7C, WAS HERE', 'A CALIFORNIAN DESERT VALLEY WITH A SCARY NAME', 'ROCKS MYSTERIOUSLY SLIDE ACROSS ITS RACETRACK PLAYA'] },
-    { name: 'ICELAND', clues: ['THE LAND OF FIRE AND ICE', 'ITS ASH CLOUD GROUNDED FLIGHTS ACROSS EUROPE IN 2010', 'THE GEYSER THAT GAVE ALL GEYSERS THEIR NAME IS HERE'] },
-    { name: 'HAWAII', clues: ['KILAUEA SENDS LAVA INTO THE SEA ON THESE ISLANDS', 'THE 50TH US STATE, BUILT ENTIRELY BY VOLCANOES', 'MAUNA KEA HERE IS TALLER THAN EVEREST, BASE TO PEAK'] },
-    { name: 'KRAKATOA', clues: ['ITS 1883 ERUPTION WAS HEARD 4,800 KM AWAY', 'THIS INDONESIAN VOLCANO BLEW ITSELF APART', "A NEW VOLCANO, ITS 'CHILD', GREW FROM THE SEA IN 1927"] },
-    { name: 'FUJI', clues: ["JAPAN'S TALLEST MOUNTAIN IS THIS VOLCANO", 'A SNOW-CAPPED VOLCANO SEEN FROM TOKYO ON CLEAR DAYS', 'IT LAST ERUPTED IN 1707'] },
-    { name: 'YELLOWSTONE', clues: ['THE OLD FAITHFUL GEYSER ERUPTS HERE', 'THE WORLD\'S FIRST NATIONAL PARK SITS ON A SUPERVOLCANO', 'ITS GRAND PRISMATIC SPRING IS RAINBOW COLOURED'] },
-    { name: 'ATACAMA', clues: ['THE DRIEST NON-POLAR DESERT IN THE WORLD, IN CHILE', 'NASA TESTS ITS MARS ROVERS IN THIS DESERT', 'SOME WEATHER STATIONS HERE HAVE NEVER RECORDED RAIN'] },
-    { name: 'VENUS', clues: ['THE HOTTEST PLANET IN OUR SOLAR SYSTEM', 'A PLANET HOT ENOUGH TO MELT LEAD, WITH ACID CLOUDS', 'A DAY ON THIS PLANET IS LONGER THAN ITS YEAR'] },
-    { name: 'DARVAZA', clues: ["A GAS CRATER NICKNAMED 'THE GATES OF HELL'", 'A FIERY CRATER IN TURKMENISTAN, BURNING SINCE 1971', 'SCIENTISTS SET THIS DESERT GAS PIT ALIGHT ON PURPOSE'] },
-    { name: 'ETNA', clues: ["EUROPE'S TALLEST ACTIVE VOLCANO, ON SICILY", 'THE ANCIENT GREEKS SAID THE FORGE OF HEPHAESTUS WAS INSIDE IT', 'IT OFTEN BLOWS SMOKE RINGS OUT OF ITS CRATER'] },
-    { name: 'DANAKIL', clues: ['A HOT DESERT IN ETHIOPIA WITH ACID POOLS AND LAVA LAKES', 'ONE OF THE HOTTEST PLACES ON EARTH, BELOW SEA LEVEL IN AFRICA', 'CAMEL TRAINS STILL CARRY SALT OUT OF THIS DEPRESSION'] },
-    { name: 'OUTBACK', clues: ["AUSTRALIA'S HOT, EMPTY MIDDLE", 'ULURU, A GIANT RED ROCK, RISES FROM IT', 'THE FLYING DOCTOR SERVICE COVERS THIS REMOTE AREA'] },
+    { name: "ITALY", clues: ["VESUVIUS, THE VOLCANO THAT BURIED POMPEII, IS HERE", "MOUNT ETNA, EUROPE'S TALLEST ACTIVE VOLCANO, IS HERE", "STROMBOLI, THE 'LIGHTHOUSE OF THE MEDITERRANEAN', ERUPTS HERE"] },
+    { name: "ICELAND", clues: ["THE LAND OF FIRE AND ICE, FULL OF VOLCANOES AND GLACIERS", "ITS VOLCANO'S ASH CLOUD GROUNDED FLIGHTS ACROSS EUROPE IN 2010", "THE GEYSER THAT GAVE ALL GEYSERS THEIR NAME, GEYSIR, IS HERE"] },
+    { name: "USA", clues: ["DEATH VALLEY, WHERE 56.7C WAS ONCE RECORDED, IS HERE", "YELLOWSTONE PARK SITS ON A SUPERVOLCANO IN THIS COUNTRY", "MOUNT ST HELENS BLEW ITS TOP OFF HERE IN 1980"] },
+    { name: "JAPAN", clues: ["MOUNT FUJI, A SNOW-CAPPED VOLCANO, IS IN THIS COUNTRY", "SNOW MONKEYS BATHE IN ITS VOLCANIC HOT SPRINGS IN WINTER", "SAKURAJIMA HERE PUFFS OUT ASH HUNDREDS OF TIMES A YEAR"] },
+    { name: "INDONESIA", clues: ["KRAKATOA, WHOSE 1883 BLAST WAS HEARD 4,800 KM AWAY, IS HERE", "TAMBORA HERE ERUPTED AND CAUSED THE YEAR WITHOUT A SUMMER, 1816", "KAWAH IJEN VOLCANO HERE BURNS WITH BLUE FLAMES AT NIGHT"] },
+    { name: "ETHIOPIA", clues: ["THE DANAKIL DEPRESSION, WITH ITS ACID POOLS, IS HERE", "ERTA ALE, A VOLCANO WITH A LAVA LAKE, IS IN THIS COUNTRY", "DALLOL HERE HOLDS THE RECORD FOR THE HOTTEST YEAR-ROUND AVERAGE"] },
+    { name: "TURKMENISTAN", clues: ["THE DARVAZA GAS CRATER, THE 'GATES OF HELL', BURNS HERE", "MOST OF THIS COUNTRY IS THE HOT KARAKUM DESERT", "ITS CAPITAL, ASHGABAT, HAS THE MOST WHITE MARBLE BUILDINGS ON EARTH"] },
+    { name: "AUSTRALIA", clues: ["ULURU, A GIANT RED ROCK, RISES FROM ITS HOT OUTBACK", "FLYING DOCTORS SERVE THE HOT, EMPTY OUTBACK OF THIS COUNTRY", "MARBLE BAR HERE HAD 160 DAYS IN A ROW OVER 37.8C"] },
+    { name: "CHILE", clues: ["THE ATACAMA, THE DRIEST HOT DESERT ON EARTH, IS HERE", "VILLARRICA VOLCANO HERE HAS A BUBBLING LAVA LAKE", "SOME WEATHER STATIONS IN ITS DESERT HAVE NEVER RECORDED RAIN"] },
+    { name: "MEXICO", clues: ["THE JALAPENO CHILLI IS NAMED AFTER A CITY IN THIS COUNTRY", "PARICUTIN VOLCANO GREW OUT OF A CORNFIELD HERE IN 1943", "THE CAVE OF THE CRYSTALS HERE IS A DEADLY 58C INSIDE"] },
+    { name: "INDIA", clues: ["THE GHOST PEPPER, ONE OF THE HOTTEST CHILLIES, COMES FROM HERE", "DIWALI, THE FESTIVAL OF LIGHTS, IS ITS BIGGEST FESTIVAL", "THE TOWN OF PHALODI HERE REACHED 51C IN MAY 2016"] },
+    { name: "EGYPT", clues: ["THE SPHINX GUARDS THE PYRAMIDS IN ITS HOT DESERT", "ITS WHITE DESERT IS FULL OF CHALK ROCKS SHAPED LIKE MUSHROOMS", "THE VALLEY OF THE KINGS, WITH TUTANKHAMUN'S TOMB, IS HERE"] },
+    { name: "ALGERIA", clues: ["THE BIGGEST COUNTRY IN AFRICA, MOSTLY SAHARA DESERT", "ITS CAPITAL CITY IS ALGIERS", "OUARGLA HERE HIT 51.3C, AFRICA'S HOTTEST RELIABLE RECORD"] },
+    { name: "IRAN", clues: ["PERSIAN RUGS AND SAFFRON COME FROM THIS HOT COUNTRY", "ITS LUT DESERT HAS THE HOTTEST GROUND EVER MEASURED FROM SPACE", "MOUNT DAMAVAND, THE HIGHEST VOLCANO IN ASIA, IS HERE"] },
+    { name: "TANZANIA", clues: ["KILIMANJARO, AFRICA'S TALLEST MOUNTAIN, IS A VOLCANO HERE", "OL DOINYO LENGAI HERE ERUPTS BLACK LAVA THAT TURNS WHITE", "THE NGORONGORO CRATER, AN OLD VOLCANO FULL OF ANIMALS, IS HERE"] },
+    { name: "SAUDI ARABIA", clues: ["MOST OF THE EMPTY QUARTER, A HUGE SAND DESERT, LIES HERE", "MECCA, ISLAM'S HOLIEST CITY, IS IN THIS DESERT COUNTRY", "ITS CAPITAL, RIYADH, STANDS IN THE MIDDLE OF THE DESERT"] },
+    { name: "CHINA", clues: ["THE FLAMING MOUNTAINS OF TURPAN GLOW RED IN THE HEAT HERE", "SICHUAN HOTPOT, FAMOUS FOR NUMBING SPICE, COMES FROM HERE", "THE TAKLAMAKAN, CALLED THE 'SEA OF DEATH', IS A DESERT HERE"] },
+    { name: "SPAIN", clues: ["MOUNT TEIDE, A VOLCANO ON TENERIFE, IS ITS HIGHEST PEAK", "A VOLCANO ON LA PALMA, IN ITS CANARY ISLANDS, ERUPTED IN 2021", "VALENCIA BURNS GIANT FIGURES IN ITS LAS FALLAS FIRE FESTIVAL"] },
+    { name: "GREECE", clues: ["SANTORINI, A VOLCANO ISLAND WITH WHITE HOUSES, IS HERE", "THE OLYMPIC FLAME IS LIT HERE BY THE SUN'S RAYS AND A MIRROR", "A HUGE ERUPTION ON THERA HERE MAY HAVE ENDED THE MINOANS"] },
+    { name: "PHILIPPINES", clues: ["MAYON VOLCANO HERE IS FAMOUS FOR ITS PERFECT CONE", "PINATUBO HERE ERUPTED IN 1991 AND COOLED THE WHOLE PLANET", "TAAL HERE IS A VOLCANO ISLAND SITTING INSIDE A LAKE"] },
+    { name: "NEW ZEALAND", clues: ["ROTORUA HERE SMELLS OF EGGS FROM ITS BUBBLING MUD POOLS", "WHAKAARI, OR WHITE ISLAND, IS AN ACTIVE VOLCANO HERE", "MOUNT NGAURUHOE HERE PLAYED MOUNT DOOM IN THE LORD OF THE RINGS"] },
+    { name: "RUSSIA", clues: ["KAMCHATKA, A PENINSULA PACKED WITH VOLCANOES, IS PART OF IT", "IN 1908 A FIREBALL FLATTENED A FOREST AT TUNGUSKA HERE", "VERKHOYANSK HERE HIT 38C IN 2020, A RECORD FOR THE ARCTIC"] },
+    { name: "TURKEY", clues: ["MOUNT ARARAT, WHERE NOAH'S ARK IS SAID TO REST, IS A VOLCANO HERE", "PAMUKKALE, THE 'COTTON CASTLE', HAS WHITE HOT-SPRING POOLS HERE", "THE CHIMAERA FLAMES HAVE BURNED FROM ITS ROCKS FOR OVER 2,000 YEARS"] },
+    { name: "AZERBAIJAN", clues: ["ITS HILLSIDE YANAR DAG HAS BEEN ON FIRE FOR DECADES", "ABOUT HALF THE WORLD'S MUD VOLCANOES ARE IN THIS COUNTRY", "ITS CAPITAL, BAKU, SITS ON THE CASPIAN SEA"] },
+    { name: "GUATEMALA", clues: ["ITS VOLCANO FUEGO IS NAMED AFTER THE SPANISH WORD FOR FIRE", "THREE VOLCANOES RING ITS OLD COLONIAL CITY OF ANTIGUA", "LAKE ATITLAN HERE FILLS A GIANT OLD VOLCANIC CRATER"] },
+    { name: "NAMIBIA", clues: ["ITS DESERT HAS SOME OF THE TALLEST SAND DUNES ON EARTH", "THE RED DUNES OF SOSSUSVLEI ARE IN THIS COUNTRY", "THE SKELETON COAST, FULL OF SHIPWRECKS, RUNS ALONG IT"] },
+    { name: "FRANCE", clues: ["BASTILLE DAY FIREWORKS LIGHT UP THE EIFFEL TOWER HERE", "ITS AUVERGNE REGION IS COVERED IN OLD VOLCANOES", "PITON DE LA FOURNAISE, ON ITS ISLAND OF REUNION, ERUPTS OFTEN"] },
+    { name: "UK", clues: ["BONFIRE NIGHT, ON 5 NOVEMBER, REMEMBERS GUY FAWKES HERE", "EDINBURGH CASTLE SITS ON TOP OF AN OLD VOLCANO HERE", "THE GIANT'S CAUSEWAY'S STONE COLUMNS FORMED FROM LAVA HERE"] },
   ],
 };
-const usedPlaces = new Set();
-// Builds a question: the answer goes on the octopus's barrel, other places from the same set go on the rest.
-function makeQuestion(n, target) {
-  const pool = G.mode === 'boss' ? TRIVIA.demon.concat(TRIVIA.chad) : TRIVIA[G.mode];
-  const tier = G.mode === 'boss' ? 2 : Math.min(G.keys, 2);
-  let fresh = pool.filter(p => !usedPlaces.has(p.name));
-  if (fresh.length < 1) { pool.forEach(p => usedPlaces.delete(p.name)); fresh = pool.slice(); }
-  const ans = pick(fresh);
-  usedPlaces.add(ans.name);
-  const others = shuffle(pool.filter(p => p !== ans)).slice(0, n - 1);
+
+/* ---------- picking questions ----------
+   A shuffled bag per list: every country comes up once, in a random order, before any
+   comes up again, and the bag lasts the whole visit (a new game does not start the
+   same countries over). The boss mixes both lists, one entry per country. */
+const usedPlaces = new Set();   // "<list>|<country>" already asked from the current bag
+const lastAsked = {};           // list -> the country asked most recently
+const BOSS_POOL = (() => {
+  const byName = new Map();
+  for (const p of TRIVIA.demon.concat(TRIVIA.chad)) byName.set(p.name, [...(byName.get(p.name) || []), p]);
+  return [...byName.values()];   // each item is every entry for one country; a random one is used
+})();
+function askQuestion(list, n, target, tier) {
+  const pool = list === 'boss' ? BOSS_POOL : TRIVIA[list].map(p => [p]);
+  const nameOf = e => e[0].name, used = e => usedPlaces.has(list + '|' + nameOf(e));
+  let fresh = pool.filter(e => !used(e));
+  if (!fresh.length) {   // bag empty: refill it, but never open the new bag with the country just asked
+    pool.forEach(e => usedPlaces.delete(list + '|' + nameOf(e)));
+    fresh = pool.filter(e => nameOf(e) !== lastAsked[list]);
+  }
+  const ans = pick(fresh), entry = pick(ans);
+  usedPlaces.add(list + '|' + nameOf(ans)); lastAsked[list] = nameOf(ans);
+  const others = shuffle(pool.filter(e => e !== ans)).slice(0, n - 1).map(nameOf);
   const labels = [];
-  for (let i = 0, k = 0; i < n; i++) labels.push(i === target ? ans.name : others[k++].name);
-  return { answer: ans.name, clue: ans.clues[tier], tier, labels };
+  for (let i = 0, k = 0; i < n; i++) labels.push(i === target ? entry.name : others[k++]);
+  return { answer: entry.name, clue: entry.clues[tier], tier, labels };
+}
+// A question for the solo game: the answer goes on the octopus's barrel, other countries on the rest.
+function makeQuestion(n, target) {
+  const tier = G.mode === 'boss' ? 2 : Math.min(G.keys, 2);
+  return askQuestion(G.mode, n, target, tier);
 }
 
 /* =====================================================================
@@ -1852,7 +1926,16 @@ function animBg(g, th, view, t) {
 }
 
 /* ---------- barrels, each wearing a place-name sign while a question is live ---------- */
-function drawBarrel(g, th, cx, bottom, u, b, view) {
+// The solo game draws the signs in their own pass after every barrel (drawBarrelSigns), so a long
+// country name like TURKMENISTAN is never covered by the barrel next to it.
+function drawBarrelSigns(g, th, posOf, row = null) {
+  [...G.barrels].sort((a, b) => b.row - a.row || a.col - b.col).forEach(b => {
+    if (!b.label || b.pop > 0 || (row != null && b.row !== row)) return;
+    const p = posOf(b);
+    drawSign(g, th, p.x, p.y, p.u, b);
+  });
+}
+function drawBarrel(g, th, cx, bottom, u, b, view, withSign = true) {
   const pop = b.pop > 0 ? clamp(easeBack(1 - b.pop / 0.35), 0.05, 1.3) : 1;
   const spr = barrelSprite(th, b.broken);
   g.save();
@@ -1861,7 +1944,7 @@ function drawBarrel(g, th, cx, bottom, u, b, view) {
   g.drawImage(spr, Math.round(-13 * u), Math.round(-30 * u), 26 * u, 32 * u);
   if (b.row === 1 && view === 'side') { g.globalAlpha = 0.18; g.fillStyle = '#000000'; g.fillRect(Math.round(-12 * u), Math.round(-30 * u), 24 * u, 30 * u); g.globalAlpha = 1; }
   g.restore();
-  if (b.label && pop === 1) drawSign(g, th, cx, bottom, u, b);
+  if (withSign && b.label && pop === 1) drawSign(g, th, cx, bottom, u, b);
 }
 // where a barrel's place-name sign sits (also used to make the sign itself tappable)
 function signRect(cx, bottom, u, b) {
@@ -2133,7 +2216,7 @@ function drawOctoGroup(g) {
 /* ---------- title, coin and hero select ---------- */
 ENTER.TITLE = () => {
   Object.assign(G, { mode: 'chad', keys: 0, coins: CFG.coins, gun: 0, bossHits: 0, banners: [], bubbles: [], hs: null, freed: [], captives: [], keyFly: null, shot: null, testShot: null, prize: null });
-  G.octo.vis = false; parts.length = 0; usedPlaces.clear();
+  G.octo.vis = false; parts.length = 0;   // usedPlaces is kept: a new game carries on through the shuffled bag
   if (Sound.ready) Sound.music('chad');
   setShootReady(true);
   announce('Chad Mode versus Demon Time. Press Enter, click or tap to insert a coin.');
@@ -2698,9 +2781,12 @@ function drawSide(g) {
   g.drawImage(th === 'chad' ? bgChadSide() : bgDemonSide(), 0, 0);
   animBg(g, th, 'side', t);
   if (o.vis && o.layer === 'back') drawOctoGroup(g);
-  G.barrels.forEach(b => { if (b.row === 1) { const p = sideBarrelPos(b); drawBarrel(g, th, p.x, p.y, 2, b, 'side'); } });
+  const sidePos = b => Object.assign(sideBarrelPos(b), { u: 2 });
+  G.barrels.forEach(b => { if (b.row === 1) { const p = sideBarrelPos(b); drawBarrel(g, th, p.x, p.y, 2, b, 'side', false); } });
+  drawBarrelSigns(g, th, sidePos, 1);
   if (o.vis && o.layer === 'front') drawOctoGroup(g);
-  G.barrels.forEach(b => { if (b.row === 0) { const p = sideBarrelPos(b); drawBarrel(g, th, p.x, p.y, 2, b, 'side'); } });
+  G.barrels.forEach(b => { if (b.row === 0) { const p = sideBarrelPos(b); drawBarrel(g, th, p.x, p.y, 2, b, 'side', false); } });
+  drawBarrelSigns(g, th, sidePos, 0);
   if (G.prize) drawPrize(g);
   drawHero(g);
   const h = G.hs;
@@ -2723,7 +2809,8 @@ function drawFP(g) {
   if (intro < 1) { const sc = lerp(1.3, 1, intro); g.translate(W / 2, H * 0.55); g.scale(sc, sc); g.translate(-W / 2, -H * 0.55); }
   g.drawImage(th === 'chad' ? bgChadFP() : bgDemonFP(), 0, 0);
   animBg(g, th, 'fp', t);
-  [...G.barrels].sort((a, b) => b.row - a.row).forEach(b => { const p = fpBarrelPos(b); drawBarrel(g, th, p.x, p.y, p.u, b, 'fp'); });
+  [...G.barrels].sort((a, b) => b.row - a.row).forEach(b => { const p = fpBarrelPos(b); drawBarrel(g, th, p.x, p.y, p.u, b, 'fp', false); });
+  drawBarrelSigns(g, th, fpBarrelPos);
   if (G.state === 'AIM' && G.sel >= 0) drawTargetBox(g, G.sel, t);
   drawParts(g, 'fp');
   if (G.shot) drawShot(g, G.shot);
@@ -2948,15 +3035,7 @@ function mpEligible(i) {
   if (S.sudden) return S.sudden.contested.includes(i);
   return true;
 }
-function mpQuestion(pool, n, target, tier) {
-  let fresh = pool.filter(p => !usedPlaces.has(p.name));
-  if (fresh.length < 1) { pool.forEach(p => usedPlaces.delete(p.name)); fresh = pool.slice(); }
-  const ans = pick(fresh); usedPlaces.add(ans.name);
-  const others = shuffle(pool.filter(p => p !== ans)).slice(0, n - 1);
-  const labels = [];
-  for (let i = 0, k = 0; i < n; i++) labels.push(i === target ? ans.name : others[k++].name);
-  return { clue: ans.clues[tier], labels, tier, answer: ans.name };
-}
+function mpQuestion(list, n, target, tier) { return askQuestion(list, n, target, tier); }
 function mpSay(msg) { MP.note = msg; MP.noteAt = G.time; }
 
 /* ---------- referee: runs the rules ---------- */
@@ -2995,7 +3074,7 @@ function mpRefTick() {
       if (S.mode === 'chad') {
         MP.R.target = Math.floor(Math.random() * 4);
         const tier = S.sudden ? 2 : Math.min(S.qDone, 2);
-        const q = mpQuestion(TRIVIA.chad, 4, MP.R.target, tier);
+        const q = mpQuestion('chad', 4, MP.R.target, tier);
         MP.R.answer = q.answer; S.q = { clue: q.clue, labels: q.labels, tier };
       }
       mpPhase('hide', MP_SECS.hide); break;
@@ -3094,7 +3173,7 @@ function mpPicked(b, tier) {
   const S = MP.S; if (!S) return;
   MP.R = MP.R || mpNewR();
   MP.R.target = b;
-  const q = mpQuestion(TRIVIA.demon, 8, b, tier);
+  const q = mpQuestion('demon', 8, b, tier);
   MP.R.answer = q.answer; S.q = { clue: q.clue, labels: q.labels, tier };
   mpPhase('intro', MP_SECS.intro);
 }
