@@ -148,7 +148,7 @@ body {
 /* Phones and iPads: no SHOOT deck (tapping the screen or an answer does everything) and a thin cabinet,
    so the screen with the octopus and the hero gets as much of the display as it can. */
 body.touch #room {
-  padding: max(4px, env(safe-area-inset-top, 0px)) max(4px, env(safe-area-inset-right, 0px)) max(4px, env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-left, 0px));
+  padding: max(2px, env(safe-area-inset-top, 0px)) max(2px, env(safe-area-inset-right, 0px)) max(2px, env(safe-area-inset-bottom, 0px)) max(2px, env(safe-area-inset-left, 0px));
 }
 #bar { grid-area: bar; box-sizing: border-box; width: var(--deck-w); height: var(--bar-h); display: flex; align-items: center; gap: 8px; }
 #barLogo { flex: 1; text-align: center; white-space: nowrap; font-size: clamp(14px, 5.2vw, 30px); letter-spacing: .04em; text-shadow: 0 3px 0 #000000; }
@@ -188,6 +188,7 @@ body.touch #room {
   color: #3a2410; background: #f4e2b8; border: 2px solid #6c3a18; border-bottom-width: 5px; border-radius: 7px;
   padding: 4px 3px; cursor: pointer; overflow-wrap: anywhere; touch-action: manipulation;
 }
+#padGrid.heroes { grid-template-columns: 1fr; grid-auto-rows: minmax(48px, 64px); }
 #pad.demon #padGrid button { color: #ffd27a; background: #2a1416; border-color: #ff8a2a; }
 #padGrid button:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 3px; }
 #padGrid button:disabled { opacity: .5; cursor: default; }
@@ -2663,18 +2664,18 @@ function drawSelect(g) {
   text(g, demon ? 'DEMON TIME' : 'CHAD MODE', W / 2, 8, { s: 3, c: demon ? ROWS.fire : ROWS.cyan, al: 'c', sh: '#000000' });
   text(g, 'CHOOSE YOUR HERO', W / 2, 40, { s: 2, c: '#ffffff', al: 'c' });
   HEROES[G.selMode].forEach((id, i) => {
-    const sel = i === G.heroSel, chosen = G.chosen && sel, x = [140, 320, 500][i], ground = 214;
-    g.fillStyle = sel ? (demon ? '#ff5a1a' : '#3fc4ff') : '#2b2052'; g.fillRect(x - 58, ground, 116, 9);
-    g.fillStyle = '#14101f'; g.fillRect(x - 58, ground + 9, 116, 4);
+    const sel = i === G.heroSel, chosen = G.chosen && sel, x = [140, 320, 500][i], ground = 236;   // heroes drawn at 4x (was 3x) so they read well on a phone
+    g.fillStyle = sel ? (demon ? '#ff5a1a' : '#3fc4ff') : '#2b2052'; g.fillRect(x - 72, ground, 144, 9);
+    g.fillStyle = '#14101f'; g.fillRect(x - 72, ground + 9, 144, 4);
     const hop = chosen ? Math.abs(Math.sin((G.st - G.chosenAt) * 10)) * 26 : sel ? Math.abs(Math.sin(t * 5)) * 6 : 0;
     g.globalAlpha = G.chosen && !sel ? 0.35 : 1;
-    drawChar(g, id, x, ground - hop, 3, { blink: blinkAt(t, i), mood: chosen ? 'happy' : null, cheer: chosen });
+    drawChar(g, id, x, ground - hop, 4, { blink: blinkAt(t, i), mood: chosen ? 'happy' : null, cheer: chosen });
     g.globalAlpha = 1;
     text(g, CHARS[id].name, x, ground + 20, { s: 2, c: sel ? ROWS.gold : '#ffffff', al: 'c' });
     if (demon) text(g, 'STARTS WITH', x, ground + 42, { s: 1, c: '#c9c2ff', al: 'c' }), text(g, GUNS[LADDERS[id][0]].name, x, ground + 54, { s: 1, c: '#ffd27a', al: 'c' });
     else { text(g, 'RESCUE', x - 14, ground + 52, { s: 1, c: '#bfe8ff', al: 'c' }); drawChar(g, PAIR[id], x + 30, ground + 72, 1, { mood: 'sad' }); }
     if (sel && !G.chosen) {
-      const ay = 70 + Math.round(Math.abs(Math.sin(t * 6)) * 6);
+      const ay = 104 + Math.round(Math.abs(Math.sin(t * 6)) * 6);
       g.fillStyle = '#ffd24a'; for (let r = 0; r < 6; r++) g.fillRect(x - 6 + r, ay + r, 12 - r * 2, 1);
     }
   });
@@ -3770,7 +3771,7 @@ function nav(dx, dy) {
   }
 }
 function toGame(e) { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) * W) / r.width, y: ((e.clientY - r.top) * H) / r.height }; }
-function heroAt(x, y) { if (y < 60 || y > 300) return -1; const i = [140, 320, 500].findIndex(cx => Math.abs(x - cx) < 85); return i; }
+function heroAt(x, y) { if (y < 60 || y > 320) return -1; const i = [140, 320, 500].findIndex(cx => Math.abs(x - cx) < 90); return i; }
 cv.addEventListener('pointerdown', e => {
   e.preventDefault();
   try { window.focus(); } catch (err) { /* keep keyboard working inside the artifact frame */ }
@@ -3933,7 +3934,7 @@ const room = document.getElementById('room'), cab = document.getElementById('cab
 /* ---------- the answer pad (tall screens): the clue in readable text and one big button per barrel ---------- */
 const padEl = $('pad'), padHead = $('padHead'), padClue = $('padClue'), padTimer = $('padTimer'), padBar = padTimer.firstElementChild, padGrid = $('padGrid');
 const PAD_MSG = {
-  TITLE: 'TAP HERE, OR THE SCREEN, TO PLAY', COIN: "LET'S GO!", SELECT: 'TAP A HERO ON THE SCREEN TO START',
+  TITLE: 'TAP HERE, OR THE SCREEN, TO PLAY', COIN: "LET'S GO!", SELECT: 'CHOOSE YOUR HERO',
   INTRO: 'THE OCTOPUS HAS GRABBED A HOSTAGE!', HIDE: 'IT IS HIDING IN ONE OF THE BARRELS...', NEWGUN: 'NEW GUN! TAP TO CARRY ON',
   UNLOCK: 'STAGE CLEAR! TAP TO CARRY ON', BOSSINTRO: 'HERE COMES THE BOSS!', GAMEOVER: 'GAME OVER. TAP TO PLAY AGAIN', VICTORY: 'YOU WIN! TAP FOR THE TITLE SCREEN',
 };
@@ -3961,6 +3962,24 @@ function syncPad() {
     padBar.style.width = (left * 100).toFixed(1) + '%';
     padBar.style.background = left > 0.5 ? '#7dff9a' : left > 0.25 ? '#ffb02e' : Math.floor(G.time * 6) % 2 ? '#ff3b3b' : '#ff8a8a';
   }
+  // hero select: one big button per hero, in the same order as on screen
+  if (G.state === 'SELECT') {
+    padGrid.hidden = false; padGrid.classList.add('heroes');
+    const key = 'heroes|' + G.selMode;
+    if (key !== padGridKey) {
+      padGridKey = key;
+      padGrid.replaceChildren(...HEROES[G.selMode].map((id, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.textContent = CHARS[id].name; btn.dataset.i = i;
+        btn.setAttribute('aria-label', 'Play as ' + CHARS[id].name.toLowerCase());
+        btn.addEventListener('click', () => { if (!G.chosen && !G.paused) chooseHero(i); });
+        return btn;
+      }));
+    }
+    for (const btn of padGrid.children) { const i = +btn.dataset.i; btn.disabled = G.chosen; btn.classList.toggle('sel', i === G.heroSel); btn.classList.toggle('right', G.chosen && i === G.heroSel); }
+    return;
+  }
+  padGrid.classList.remove('heroes');
   // the barrel buttons, laid out like the barrels in the aiming view: back row on top
   padGrid.hidden = !showQ;
   if (!showQ) { padGridKey = ''; return; }
@@ -4050,7 +4069,7 @@ function layout() {
 // Sideways: the screen takes the full height, with PAUSE and SOUND in a narrow column beside it.
 function layoutTouch(aw, ah) {
   const side = aw > ah * 1.05;
-  const pad = 4, gap = 6, bez = clamp(Math.round(Math.min(aw, ah) * 0.008), 3, 8);
+  const pad = 2, gap = 4, bez = clamp(Math.round(Math.min(aw, ah) * 0.005), 2, 5);   // a thin frame: every pixel goes to the screen
   let sw, barH = 0, barW = 0;
   if (side) {
     barW = clamp(Math.round(aw * 0.085), 62, 96);
