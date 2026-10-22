@@ -3,6 +3,8 @@
 A one-file pixel-art arcade trivia game. Play it free in your browser:
 **https://workexperiencedts.github.io/octrivia/**
 
+Also on itch.io: **https://malik1o2.itch.io/octrivia**
+
 Guess which **country** the octopus is hiding in: 51 countries in Chad Mode (landmarks, food, flags, sport) and 28 in Demon Time (volcanoes, deserts and heat records), each with an easy, medium and hard clue, dealt in a random order. Works on computers, phones and iPads. Single-player only in this copy.
 
 ## Two ways to play
