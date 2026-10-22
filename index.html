@@ -196,6 +196,9 @@ body.touch #room {
 #pad #padGrid button.right { color: #0b2a12; background: #7dff9a; border-color: #1aa845; opacity: 1; }
 #pad #padGrid button.wrong { color: #3a0808; background: #ff8a8a; border-color: #b81414; opacity: 1; }
 #padGrid button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* two big buttons: PLAY / DAILY OCTO on the title, SHARE / DONE after the daily */
+#padGrid.duo { grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(52px, 76px); }
+#pad #padGrid button.go { color: #3a2a08; background: #ffd24a; border-color: #a8741a; }
 
 /* Pause menu and sound panel: full-window overlays with big, thumb-sized buttons */
 .overlay {
@@ -1786,6 +1789,7 @@ function askQuestion(list, n, target, tier) {
 }
 // A question for the solo game: the answer goes on the octopus's barrel, other countries on the rest.
 function makeQuestion(n, target) {
+  if (G.daily) { const q = dailyQ().q; return Object.assign({}, q, { labels: q.labels.slice() }); }   // the day's question, the same for everyone
   const tier = G.mode === 'boss' ? 2 : Math.min(G.keys, 2);
   return askQuestion(G.mode, n, target, tier);
 }
@@ -2029,12 +2033,17 @@ function drawHUD(g) {
   const us = G.uiS;
   text(g, G.mode === 'chad' ? 'CHAD MODE' : G.mode === 'demon' ? 'DEMON TIME' : 'BOSS', 8, 6, { s: 2, c: G.mode === 'chad' ? ROWS.cyan : ROWS.fire });
   const cy = 26;
-  const cw = text(g, 'CREDITS', 8, cy, { s: us, c: '#ffffff' });
-  for (let i = 0; i < CFG.coins; i++) {
-    const x = 8 + cw + 6 + i * 16, on = i < G.coins;
-    g.globalAlpha = on ? 1 : 0.25; g.drawImage(coinSprite(), x, cy - 2 + (us > 1 ? 2 : 0), 14, 14); g.globalAlpha = 1;
+  if (G.daily) text(g, 'DAILY ' + Math.min(G.daily.round + 1, DAILY_PLAN.length) + '/' + DAILY_PLAN.length, 8, cy, { s: us, c: '#ffffff' });
+  else {
+    const cw = text(g, 'CREDITS', 8, cy, { s: us, c: '#ffffff' });
+    for (let i = 0; i < CFG.coins; i++) {
+      const x = 8 + cw + 6 + i * 16, on = i < G.coins;
+      g.globalAlpha = on ? 1 : 0.25; g.drawImage(coinSprite(), x, cy - 2 + (us > 1 ? 2 : 0), 14, 14); g.globalAlpha = 1;
+    }
   }
-  if (G.mode !== 'boss') {
+  drawScoreHUD(g);
+  if (G.daily) drawDailyGrid(g);
+  else if (G.mode !== 'boss') {
     for (let i = 0; i < CFG.keysNeeded; i++) {
       const x = W - 8 - (CFG.keysNeeded - i) * 30, y = 6;
       g.fillStyle = '#14101f'; g.fillRect(x, y, 26, 18); g.fillStyle = '#2b2052'; g.fillRect(x + 1, y + 1, 24, 16);
@@ -2128,10 +2137,13 @@ const G = {
   inputMode: 'mouse', paused: false, uiS: 1, portrait: false, menuSel: 0,
   octo: { x: 405, ground: 250, u: 3, vis: false, mood: 'smug', singed: false, flop: null, rise: null, layer: 'back' },
   hs: null, keyFly: null, nextSlurp: 0, hugAt: null, doneAt: null, inkBlobs: [], hideSpeed: 1,
+  // score (see the SCORE section): the run's points, the number on screen (it counts up), the streak
+  score: 0, scoreShown: 0, streak: 0, bestStreak: 0, rights: 0, fastest: null, pops: [], hsBeat: false,
+  daily: null, dailyPending: false, dailyView: null, idleAt: 0, lastHeroIdx: null,
 };
 const ENTER = {}, UPDATE = {};
-// Online play only works in the Portal and on claude.ai, so this public copy offers single player only.
-const TITLE_MENU = ['1 PLAYER'], TITLE_MENU_Y = [176];
+// Online play only works in the Portal and on claude.ai, so this public copy offers PLAY and the DAILY OCTO.
+const TITLE_MENU = ['PLAY', 'DAILY OCTO'], TITLE_MENU_Y = [144, 168];
 function setState(s) { G.state = s; G.st = 0; G.steps = {}; (ENTER[s] || noop)(); }
 function once(k) { if (G.steps[k]) return false; G.steps[k] = true; return true; }
 function announce(msg) { srEl.textContent = msg; }
@@ -2217,24 +2229,32 @@ function drawOctoGroup(g) {
 ENTER.TITLE = () => {
   Object.assign(G, { mode: 'chad', keys: 0, coins: CFG.coins, gun: 0, bossHits: 0, banners: [], bubbles: [], hs: null, freed: [], captives: [], keyFly: null, shot: null, testShot: null, prize: null });
   G.octo.vis = false; parts.length = 0;   // usedPlaces is kept: a new game carries on through the shuffled bag
+  G.daily = null; G.dailyPending = false; G.pops = []; G.idleAt = G.time;
   if (Sound.ready) Sound.music('chad');
   setShootReady(true);
-  announce('Chad Mode versus Demon Time. Press Enter, click or tap to insert a coin.');
+  announce('Octrivia. Choose Play, or the Daily Octo: the same ten clues for everyone today.');
 };
-function insertCoin() { Sound.unlock(); Sound.fx.coin(); Sound.music('chad'); setState('COIN'); }
+function insertCoin() { Sound.unlock(); Sound.fx.coin(); Sound.music('chad'); resetRun(); setState('COIN'); }
 UPDATE.COIN = () => { if (G.st > 0.8) startSelect('chad'); };
-function startSelect(mode) { G.selMode = mode; G.mode = mode; G.heroSel = 1; G.chosen = false; setState('SELECT'); }
+// the hero you played last time is already picked, so "one more go" is a single press
+function startSelect(mode) { G.selMode = mode; G.mode = mode; G.heroSel = mode === 'chad' && G.lastHeroIdx != null ? G.lastHeroIdx : 1; G.chosen = false; setState('SELECT'); }
 ENTER.SELECT = () => { setShootReady(true); announce('Choose your hero: ' + HEROES[G.selMode].map(id => CHARS[id].name).join(', ') + '.'); };
-UPDATE.SELECT = () => { if (G.chosen && G.st - G.chosenAt > 0.8) beginMode(G.selMode, HEROES[G.selMode][G.heroSel]); };
+UPDATE.SELECT = () => {
+  if (!G.chosen || G.st - G.chosenAt <= 0.8) return;
+  const hero = HEROES[G.selMode][G.heroSel];
+  if (G.dailyPending) beginDaily(hero); else beginMode(G.selMode, hero);
+};
 function chooseHero(i) {
   if (G.chosen) return;
   G.heroSel = i; G.chosen = true; G.chosenAt = G.st; Sound.fx.select();
+  if (G.selMode === 'chad') G.lastHeroIdx = i;
   announce(CHARS[HEROES[G.selMode][i]].name + ' chosen.');
 }
 function makeBarrels(mode) { return Array.from({ length: CFG.barrels[mode] }, (_, i) => ({ i, row: i < 4 ? 0 : 1, col: i % 4, broken: false, pop: 0, label: null })); }
 function nextCaptive() { const c = pick(CAPTIVES.filter(x => x !== G.lastCaptive)); G.lastCaptive = c; return c; }
 function beginMode(mode, hero) {
   Object.assign(G, { mode, hero, keys: 0, gun: 0, firstRound: true, lastResult: null, freed: [], hs: null });
+  G.stageScore = G.score;   // RETRY in the pause menu goes back to this
   G.hostage = mode === 'chad' ? PAIR[hero] : nextCaptive();
   G.barrels = makeBarrels(mode);
   setState('INTRO');
@@ -2278,8 +2298,9 @@ UPDATE.INTRO = () => {
 };
 
 ENTER.HIDE = () => {
-  G.target = Math.floor(Math.random() * G.barrels.length);   // the octopus picks its barrel at random
-  G.sel = -1; G.timedOut = false; G.deadline = null;
+  // the octopus picks its barrel at random (in the Daily Octo, from the day's seeded list)
+  G.target = G.daily ? dailyQ().target : Math.floor(Math.random() * G.barrels.length);
+  G.sel = -1; G.timedOut = false; G.deadline = null; G.fireLeft = 0; G.fireRT = null;
   G.barrels.forEach(b => { if (b.broken) { b.broken = false; b.pop = 0.35; } b.label = null; });
   G.q = makeQuestion(G.barrels.length, G.target);   // the trivia clue that points at that barrel
   G.prize = null; G.bubbles = []; G.shot = null;
@@ -2340,6 +2361,8 @@ function chooseBarrel(i) {
 }
 
 ENTER.SHOT = () => {
+  // how much of the clue timer was left when the trigger was pulled: the speed bonus, and the "fastest" stat
+  if (G.deadline != null) { G.fireLeft = clamp((G.deadline - G.time) / CFG.decideSeconds, 0, 1); G.fireRT = Math.max(0, CFG.decideSeconds - (G.deadline - G.time)); }
   const gun = currentGun(), m = muzzleWorld(gun), c = fpBarrelCenter(G.sel);
   G.shot = makeShot(gun, m.x, m.y, c.x, c.y, 'fp');
   G.recoil = 1; GUNS[gun].snd(); muzzleFlash(gun, m.x, m.y, 'fp'); shake(3);
@@ -2358,8 +2381,10 @@ UPDATE.SHOT = dt => {
 };
 
 ENTER.RESULT = () => {
-  G.lastResult = G.hitResult; G.shot = null; G.hugAt = null; G.doneAt = null;
+  G.lastResult = G.hitResult; G.shot = null; G.hugAt = null; G.doneAt = null; G.lastAward = 0;
   setShootReady(false);
+  // the Daily Octo's square for this clue: green for a quick right answer, yellow for a slow one, red for a miss
+  if (G.daily) G.daily.results[G.daily.round] = G.hitResult === 'hit' ? (G.fireLeft >= 0.5 ? 'g' : 'y') : 'r';
   const o = G.octo;
   if (G.hitResult === 'hit') {
     placeOctoAtBarrel(G.sel, true);
@@ -2380,7 +2405,10 @@ UPDATE.RESULT = () => {
 };
 function resultHit(t) {
   const o = G.octo, h = G.hs;
-  if (once('reveal')) { Sound.fx.thud(); announce('Hit! It was ' + G.q.answer + '.'); banner('RIGHT! ' + G.q.answer, { c: ROWS.gold, s: 3, dur: 1.6, y: 160 }); }
+  if (once('reveal')) {
+    Sound.fx.thud(); announce('Hit! It was ' + G.q.answer + '.'); banner('RIGHT! ' + G.q.answer, { c: ROWS.gold, s: 3, dur: 1.6, y: 112 });
+    awardHit(sideBarrelPos(G.barrels[G.sel]).x);
+  }
   if (t > 0.5 && once('drop')) {
     const p = sideBarrelPos(G.barrels[G.sel]);
     setHS('falling', { fx: h.x, fg: h.g, tx: clamp(p.x - 44, 160, W - 30), tg: SIDE.ground, after: null });
@@ -2394,12 +2422,16 @@ function resultHit(t) {
     for (let i = 0; i < 6; i++) spawn({ view: 'side', x: SIDE.heroX + 26 + rand(-18, 18), y: SIDE.ground - 70, vx: rand(-30, 30), vy: rand(-90, -40), life: 1.2, type: 'heart' });
   }
   if (G.hugAt != null && t > G.hugAt + 0.4 && once('key')) {
-    G.keyFly = { t0: G.time, x: SIDE.heroX + 14, y: SIDE.ground - 100, slot: G.keys };
-    Sound.fx.key(); banner('KEY GET!', { c: ROWS.gold, s: 5, dur: 1.5, y: 112 });
+    if (G.daily) G.doneAt = t;   // the Daily Octo has no keys: every clue counts on its own
+    else {
+      G.keyFly = { t0: G.time, x: SIDE.heroX + 14, y: SIDE.ground - 100, slot: G.keys };
+      Sound.fx.key(); banner('KEY GET!', { c: ROWS.gold, s: 5, dur: 1.5, y: 112 });
+    }
   }
-  if (G.steps.key && !G.keyFly && once('keyIn')) { G.keys++; G.doneAt = t; announce('Key ' + G.keys + ' of ' + CFG.keysNeeded + '.'); }
+  if (!G.daily && G.steps.key && !G.keyFly && once('keyIn')) { G.keys++; G.doneAt = t; announce('Key ' + G.keys + ' of ' + CFG.keysNeeded + '.'); }
   if (G.doneAt != null && t > G.doneAt + 0.7) {
-    if (G.mode === 'chad') {
+    if (G.daily) dailyAfterRound();
+    else if (G.mode === 'chad') {
       if (G.keys >= CFG.keysNeeded) setState('UNLOCK'); else { setHS('free'); setState('INTRO'); }
     } else { setHS('leaving'); G.gun = Math.min(G.gun + 1, 3); setState('NEWGUN'); }
   }
@@ -2416,14 +2448,21 @@ function resultMiss(t) {
   }
   if (t > 1.25 && once('miss')) {
     banner(G.timedOut ? 'TOO SLOW!' : 'MISS!', { c: ROWS.red, s: 6, dur: 1.3, y: 112 }); Sound.fx.buzz();
-    G.overNow = G.coins <= 0;
-    if (G.coins > 0) { G.coins--; dropCoin(G.coins); Sound.fx.clunk(); }
-    if (G.mode !== 'boss' && G.keys > 0) { shatterKeys(G.keys); G.keys = 0; Sound.fx.shatter(); }
-    if (G.mode === 'demon' && G.gun > 0) { G.gun = 0; banner('BACK TO ' + GUNS[currentGun()].name, { s: 2, y: 176, dur: 1.9, c: ROWS.fire }); }
-    announce(G.overNow ? 'Out of credits. Game over.' : 'Miss. Credits left: ' + G.coins + '.');
+    loseStreak();
+    if (G.daily) {   // no credits to lose in the Daily Octo: on to the next clue
+      G.overNow = false;
+      announce('Miss. On to clue ' + Math.min(G.daily.round + 2, DAILY_PLAN.length) + '.');
+    } else {
+      G.overNow = G.coins <= 0;
+      if (G.coins > 0) { G.coins--; dropCoin(G.coins); Sound.fx.clunk(); }
+      if (G.mode !== 'boss' && G.keys > 0) { shatterKeys(G.keys); G.keys = 0; Sound.fx.shatter(); }
+      if (G.mode === 'demon' && G.gun > 0) { G.gun = 0; banner('BACK TO ' + GUNS[currentGun()].name, { s: 2, y: 176, dur: 1.9, c: ROWS.fire }); }
+      announce(G.overNow ? 'Out of credits. Game over.' : 'Miss. Credits left: ' + G.coins + '.');
+    }
   }
   if (G.steps.miss && t > (G.overNow ? 2.6 : 3.1)) {
-    if (G.overNow) setState('GAMEOVER'); else if (G.mode === 'boss') setState('HIDE'); else setState('INTRO');
+    if (G.daily) dailyAfterRound();
+    else if (G.overNow) setState('GAMEOVER'); else if (G.mode === 'boss') setState('HIDE'); else setState('INTRO');
   }
 }
 function resultBossHit(t) {
@@ -2432,11 +2471,12 @@ function resultBossHit(t) {
     G.bossHits++; Sound.fx.roar(); shake(12);
     const c = G.captives.shift();
     if (c) { const sp = heldSpots()[c.spot]; G.freed.push({ id: c.id, state: 'falling', t: 0, x: sp.x, g: sp.g, fx: sp.x, fg: sp.g, tx: clamp(sp.x, 150, W - 30), tg: SIDE.ground, after: 'run', idx: G.freed.length }); }
-    banner('BOSS HIT ' + G.bossHits + '/' + CFG.bossHits, { c: ROWS.gold, s: 4, dur: 1.4, y: 112 }); banner('RIGHT! ' + G.q.answer, { c: ROWS.gold, s: 3, dur: 1.6, y: 160 });
-    announce('Boss hit ' + G.bossHits + ' of ' + CFG.bossHits + '.');
+    banner(G.daily ? 'BOSS DOWN!' : 'BOSS HIT ' + G.bossHits + '/' + CFG.bossHits, { c: ROWS.gold, s: 4, dur: 1.4, y: 112 }); banner('RIGHT! ' + G.q.answer, { c: ROWS.gold, s: 3, dur: 1.6, y: 160 });
+    announce(G.daily ? 'Boss hit!' : 'Boss hit ' + G.bossHits + ' of ' + CFG.bossHits + '.');
+    awardHit(sideBarrelPos(G.barrels[G.sel]).x);
   }
   if (t > 1.2 && once('angry')) { o.mood = 'roar'; const m = octoMouth(); say(m.x - 40, m.y - 60, pick(TAUNTS.angry), 1.3); }
-  if (t > 2.6) setState(G.bossHits >= CFG.bossHits ? 'VICTORY' : 'HIDE');
+  if (t > 2.6) { if (G.daily) dailyAfterRound(); else setState(G.bossHits >= CFG.bossHits ? 'VICTORY' : 'HIDE'); }
 }
 function dropCoin(slot) {
   const cw = textImg('CREDITS', G.uiS, '#ffffff', '#14101f', null).width;
@@ -2515,13 +2555,17 @@ UPDATE.UNLOCK = dt => {
   if (t > 1.75 && once('burst')) { Sound.fx.gate(); shake(14); flash('#ff3b1f', 0.9); burstAt(320, 196, 'ui', ['#ffd24a', '#ff8a1a', '#ff3b1f', '#5a5e66'], 90, 420, [3, 8]); G.keys = 0; }
   if (t > 2.3 && once('sweep')) Sound.fx.sweep();
   if (t > 4.4 && once('roar')) { Sound.fx.roar(); shake(12); flash('#ff2a00', 0.7); }
-  if (t > 5.2 && once('title')) { Sound.music('demon'); banner('DEMON TIME', { s: 8, c: ROWS.fire, dur: 2.3, y: 30 }); banner('WELCOME TO OCTO ISLAND', { s: 2, c: ROWS.bone, dur: 2.3, y: 112 }); }
+  if (t > 5.2 && once('title')) {
+    Sound.music('demon'); banner('DEMON TIME', { s: 8, c: ROWS.fire, dur: 2.3, y: 30 }); banner('WELCOME TO OCTO ISLAND', { s: 2, c: ROWS.bone, dur: 2.3, y: 112 });
+    if (!G.daily) stageClearBonus();
+  }
   if (t > 7.6) finishUnlock();
 };
 function finishUnlock() {
   if (G.state !== 'UNLOCK') return;
-  if (!G.steps.title) Sound.music('demon');
+  if (!G.steps.title) { Sound.music('demon'); if (!G.daily) stageClearBonus(); }   // skipped before the banners: still pay the bonus
   G.keys = 0; G.coins = CFG.coins;   // keys spent, credits refilled for Demon Time
+  if (G.daily) { dailyEnterRound(); return; }   // the Daily Octo keeps the hero you picked
   startSelect('demon');
 }
 function drawUnlock(g) {
@@ -2588,7 +2632,8 @@ ENTER.VICTORY = () => {
   const o = G.octo;
   burstAt(o.x, o.ground - 40, 'ui', ['#ffffff', '#ffd24a', '#ff5a1a', '#7a2bc9', '#1c0a10'], 150, 520, [3, 9]);
   o.vis = false; G.hs = null; G.captives = [];
-  setShootReady(false); announce('You win! Everyone is free.');
+  finishRun(true);   // the boss and credits-left bonuses, and the high-score table
+  setShootReady(false); announce('You win! Everyone is free. Your score: ' + G.score + (G.newBest ? '. A new high score!' : '.'));
 };
 function firework(x, y) {
   Sound.fx.pop();
@@ -2601,7 +2646,12 @@ UPDATE.VICTORY = dt => {
   if (t > 1.4 && once('fanfare')) Sound.fx.fanfare();
   if (t > 3.0 && once('music')) Sound.music('victory');
   if (t > 1.4 && Math.random() < dt * 22) spawn({ view: 'ui', x: rand(0, W), y: -6, vx: rand(-30, 30), vy: rand(40, 90), g: 30, life: 6, s: randi(3, 5), c: pick(['#ff4f8a', '#ffd24a', '#5ec8ff', '#7dff9a', '#ffffff', '#c27bff']), type: 'confetti', vr: rand(-8, 8), fade: false });
-  if (t > 30) setState('TITLE');
+  // the score tally (drawVictoryScore): a tick for each bonus line, a jingle as the total counts up
+  if (t > 2.4 && once('tb1')) Sound.fx.blip();
+  if (t > 3.0 && once('tb2')) Sound.fx.blip();
+  if (t > 3.6 && once('tb3')) Sound.fx.coin();
+  if (t > 4.7 && once('tb4') && G.newBest) Sound.fx.key();
+  if (t > 34) setState('TITLE');
 };
 function drawVictory(g) {
   const t = G.st;
@@ -2622,8 +2672,9 @@ function drawVictory(g) {
     const hue = Math.floor(t * 4) % 4, rows = [ROWS.gold, ROWS.cyan, ROWS.fire, ROWS.green][hue];
     text(g, 'YOU WIN!', W / 2, 18, { s: 7, c: rows, al: 'c', sh: '#000000', sc: 1 + Math.sin(t * 5) * 0.04 });
   }
-  if (t > 4) {
-    const y0 = 360 - (t - 4) * 26;
+  if (t > 1.8 && t < 10.6) drawVictoryScore(g, t - 1.8);
+  if (t > 10.6) {   // the credits roll once the score tally has gone
+    const y0 = 360 - (t - 10.6) * 26;
     CREDITS.forEach((ln, i) => { const y = y0 + i * 16; if (ln && y > 86 && y < 236) text(g, ln, W / 2, y, { s: 1, c: i === 0 || i === 14 ? ROWS.gold : '#ffffff', al: 'c' }); });
   }
   if (t > 5) centerHint(g, G.touchUI ? 'TAP FOR THE TITLE SCREEN' : 'PRESS SHOOT FOR THE TITLE SCREEN', 346, '#c9c2ff', true);
@@ -2632,9 +2683,10 @@ function drawVictory(g) {
 /* Game over: the octopus grabs the hero with a tentacle, swallows them whole and burps out their gun. */
 const EAT = { x: 420, ground: 262, u: 4 };
 ENTER.GAMEOVER = () => {
-  Sound.music(null); G.goDemon = G.mode !== 'chad'; setShootReady(false); G.bubbles = []; G.banners = [];
+  Sound.music(null); G.goDemon = G.mode !== 'chad'; setShootReady(false); G.bubbles = []; G.banners = []; G.pops = [];
   G.gunOut = null; G.hs = null; G.freed = [];
-  Sound.fx.rumble(); announce('Game over. The octopus ate you!');
+  finishRun(false);
+  Sound.fx.rumble(); announce('Game over. The octopus ate you! Your score: ' + G.score + (G.newBest ? '. A new high score!' : '.') + ' Press Shoot to play again.');
 };
 UPDATE.GAMEOVER = dt => {
   const t = G.st, id = G.goDemon ? 'demon' : 'octo';
@@ -2656,7 +2708,8 @@ UPDATE.GAMEOVER = dt => {
   }
   if (t > 3.9 && once('over')) { Sound.fx.gameover(); shake(6); }
   if (t > 3.9 && Math.random() < dt * 10) spawn({ view: 'ui', x: rand(0, W), y: -4, vy: rand(60, 140), g: 300, life: 2, s: randi(3, 6), c: G.goDemon ? '#ff7a1a' : '#bff3ff', fade: false });
-  if (t > 10) setState('TITLE');
+  if (t > 5.3 && once('best') && G.newBest) { Sound.fx.key(); confettiPuff(); }   // a new high score, even in defeat
+  if (t > 16) setState('TITLE');
 };
 function drawGameOver(g) {
   const t = G.st, demon = G.goDemon, id = demon ? 'demon' : 'octo';
@@ -2698,7 +2751,8 @@ function drawGameOver(g) {
     g.fillStyle = demon ? '#ff7a1a' : '#bff3ff';
     for (let i = 0; i < 12; i++) { const x = 20 + i * 54, len = Math.round(lerp(0, 20 + ((i * 37) % 50), seg(t, 3.9, 4.6)) + Math.sin(t * 2 + i) * 6); if (len > 0) { g.fillRect(x, 0, 6, len); g.fillRect(x - 2, len, 10, 8); } }
     text(g, 'GAME OVER', W / 2 + Math.round(Math.sin(t * 20) * (t < 4.4 ? 4 : 0)), 30, { s: 8, c: ROWS.red, al: 'c', sh: '#000000', sc: t < 4.2 ? easeBack(seg(t, 3.9, 4.2)) : 1 });
-    centerHint(g, 'YOU GOT EATEN! INSERT COIN TO TRY AGAIN', 116, '#ffe48a', true);
+    if (t > 4.4) drawGameOverScore(g, t - 4.4);
+    centerHint(g, G.touchUI ? 'YOU GOT EATEN! TAP TO PLAY AGAIN' : 'YOU GOT EATEN! PRESS SHOOT TO PLAY AGAIN', 340, '#ffe48a', true);
   }
 }
 
@@ -2724,13 +2778,10 @@ function drawTitle(g) {
   drawDrool(g, 'demon', 536, 296 - ob, 3, t);
   HEROES.chad.forEach((id, i) => drawChar(g, id, 250 + i * 70, 300 - Math.abs(Math.sin(t * 4 + i)) * 3, 2, { blink: blinkAt(t, i), leg: Math.floor(t * 4 + i) % 2 }));
   if (G.state === 'TITLE') {
-    TITLE_MENU.forEach((label, i) => {
-      const on = i === G.menuSel, y = TITLE_MENU_Y[i];
-      text(g, (on ? '> ' : '  ') + label + (on ? ' <' : '  '), W / 2, y, { s: 2, c: on ? ROWS.gold : '#ffffff', al: 'c', sh: '#000000' });
-    });
-    const arc = arcTitleLine();
-    if (arc) centerHint(g, arc, 236, '#7dff9a');
-    if (Math.floor(t * 2) % 2 === 0) centerHint(g, G.touchUI ? 'INSERT COIN: TAP THE SCREEN' : 'INSERT COIN: CLICK OR PRESS SHOOT', 214, '#c9c2ff');
+    // arcade attract mode: left alone, the title swaps to the high-score table now and then
+    const idle = G.time - G.idleAt, cyc = (idle - 9) % 16;
+    if (idle > 9 && cyc < 7 && highScores().length) drawHighScoreTable(g, Math.min(clamp(cyc / 0.35, 0, 1), clamp((7 - cyc) / 0.35, 0, 1)));
+    else drawTitleMenu(g, t);
   } else {
     const k = clamp(G.st / 0.5, 0, 1), w = Math.max(2, Math.round(28 * Math.abs(Math.cos(G.st * 12))));
     g.drawImage(coinSprite(), Math.round(320 - w / 2), Math.round(lerp(150, 214, easeIn(k))), w, 28);
@@ -2744,8 +2795,14 @@ function drawSelect(g) {
   animBg(g, demon ? 'demon' : 'chad', 'side', t);
   g.globalAlpha = 0.55; g.fillStyle = '#0b0816'; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
   drawParts(g, 'side');
-  text(g, demon ? 'DEMON TIME' : 'CHAD MODE', W / 2, 8, { s: 3, c: demon ? ROWS.fire : ROWS.cyan, al: 'c', sh: '#000000' });
-  text(g, 'CHOOSE YOUR HERO', W / 2, 40, { s: 2, c: '#ffffff', al: 'c' });
+  if (G.dailyPending) {   // the Daily Octo: say what it is while they pick
+    text(g, 'DAILY OCTO #' + dailyNumber(localDay()), W / 2, 8, { s: 3, c: ROWS.gold, al: 'c', sh: '#000000' });
+    text(g, 'THE SAME 10 CLUES FOR EVERYONE TODAY', W / 2, 40, { s: G.uiS, c: '#ffffff', al: 'c' });
+    text(g, 'EVERY CLUE COUNTS. CHOOSE YOUR HERO!', W / 2, 40 + 10 * G.uiS, { s: G.uiS, c: '#ffd27a', al: 'c' });
+  } else {
+    text(g, demon ? 'DEMON TIME' : 'CHAD MODE', W / 2, 8, { s: 3, c: demon ? ROWS.fire : ROWS.cyan, al: 'c', sh: '#000000' });
+    text(g, 'CHOOSE YOUR HERO', W / 2, 40, { s: 2, c: '#ffffff', al: 'c' });
+  }
   HEROES[G.selMode].forEach((id, i) => {
     const sel = i === G.heroSel, chosen = G.chosen && sel, x = [140, 320, 500][i], ground = 236;   // heroes drawn at 4x (was 3x) so they read well on a phone
     g.fillStyle = sel ? (demon ? '#ff5a1a' : '#3fc4ff') : '#2b2052'; g.fillRect(x - 72, ground, 144, 9);
@@ -2860,9 +2917,11 @@ function render() {
     case 'UNLOCK': drawUnlock(g); break;
     case 'GAMEOVER': drawGameOver(g); break;
     case 'VICTORY': drawVictory(g); break;
+    case 'DAILYEND': drawDailyEnd(g); break;
     default: drawSide(g);
   }
   drawBanners(g);
+  drawPops(g);
   drawParts(g, 'ui');
   if (FX.flashA > 0.01) { g.globalAlpha = clamp(FX.flashA, 0, 1); g.fillStyle = FX.flash; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
   if (G.paused) drawPause(g);
@@ -2883,6 +2942,14 @@ function update(dt) {
   G.banners = G.banners.filter(b => b.t < b.dur);
   for (const b of G.bubbles) b.t += dt;
   G.bubbles = G.bubbles.filter(b => b.t < b.dur);
+  for (const p of G.pops) { const was = p.t; p.t += dt; if (p.fly && was < POP_LAND && p.t >= POP_LAND) { G.scoreBump = G.time; Sound.fx.coin(); } }
+  G.pops = G.pops.filter(p => p.t < p.dur);
+  // the score on screen counts up to the real one, once the points have flown into it
+  if (G.scoreShown !== G.score && !popsFlying()) G.scoreShown = Math.abs(G.score - G.scoreShown) < 3 ? G.score : G.scoreShown + (G.score - G.scoreShown) * Math.min(1, dt * 7);
+  // a hot streak (x3 and up) sets the streak counter smouldering
+  if (G.streak >= 6 && ROUND_STATES.includes(G.state) && Math.random() < dt * (G.streak >= 9 ? 26 : 12)) {
+    spawn({ view: 'ui', x: W / 2 + rand(-64, 64), y: 30 + 4 * G.uiS, vx: rand(-12, 12), vy: rand(-70, -30), life: rand(0.4, 0.8), s: randi(2, 3), c: pick(['#ff8a1a', '#ffb02e', '#ffd24a', '#ff5a1a']), shrink: true });
+  }
   for (const b of G.barrels) {
     if (b.pop > 0) b.pop = Math.max(0, b.pop - dt);
   }
@@ -2897,6 +2964,456 @@ function update(dt) {
   FX.shake = Math.max(0, FX.shake - dt * 30);
   FX.flashA = Math.max(0, FX.flashA - dt * 2.2);
   G.recoil = Math.max(0, G.recoil - dt * 4);
+}
+
+/* =====================================================================
+   SCORE, HIGH SCORES AND THE DAILY OCTO
+   Every right answer scores 100 / 200 / 300 for an easy / medium / hard
+   clue, plus a speed bonus of up to the same again (the more of the clue
+   timer left when you fire, the more), times a streak multiplier: x2 from
+   3 right in a row, x3 from 6, x4 ("ON FIRE") from 9. A boss hit adds 500,
+   clearing Chad Mode 1,000, and beating the boss 2,000 plus 1,000 for each
+   credit left. The top 5 scores are kept on this device.
+   DAILY OCTO: the same 10 clues for everyone each day (5 in Chad Mode, 4 in
+   Demon Time, then the boss), picked by a random generator seeded with the
+   date. There are no credits to lose: every clue counts. The result is a
+   row of squares that can be shared, and playing on days in a row builds a
+   day streak. A daily left half-played carries on where it stopped.
+   ===================================================================== */
+const Store = (() => {
+  // localStorage, with a copy in memory: when the browser blocks storage the game still works for this visit
+  const mem = new Map();
+  return {
+    get(k, d) {
+      let v = mem.has(k) ? mem.get(k) : null;
+      if (v == null) { try { v = localStorage.getItem(k); } catch (e) { /* storage blocked */ } if (v != null) mem.set(k, v); }
+      if (v == null) return d;
+      try { return JSON.parse(v); } catch (e) { return d; }
+    },
+    set(k, val) { const s = JSON.stringify(val); mem.set(k, s); try { localStorage.setItem(k, s); } catch (e) { /* blocked: kept for this visit */ } },
+    del(k) { mem.delete(k); try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
+  };
+})();
+const fmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const TIER_NAME = ['EASY', 'MEDIUM', 'HARD'], TIER_PTS = [100, 200, 300];
+const streakMult = s => (s >= 9 ? 4 : s >= 6 ? 3 : s >= 3 ? 2 : 1);
+const MULT_BANNER = { 2: 'X2 STREAK!', 3: 'X3 HOT STREAK!', 4: 'X4 ON FIRE!' };
+const ROUND_STATES = ['INTRO', 'HIDE', 'WATCH', 'AIM', 'SHOT', 'RESULT'];
+const inBtn = (b, x, y) => Math.abs(x - b.x) <= b.w / 2 && Math.abs(y - b.y) <= b.h / 2;
+
+/* ---------- scoring ---------- */
+function resetRun() {
+  Object.assign(G, {
+    score: 0, scoreShown: 0, streak: 0, bestStreak: 0, rights: 0, fastest: null, pops: [], hsBeat: false,
+    runSaved: false, clearPaid: false, stageScore: 0, newBest: false, finalRank: 0, prevBest: 0, bonus: null, preBonus: 0, lastAward: 0,
+    daily: null, dailyPending: false,
+  });
+  G.bestAtStart = bestScore();
+}
+function addScore(pts) {
+  G.score += pts;
+  if (!G.daily && !G.hsBeat && G.bestAtStart > 0 && G.score > G.bestAtStart) {   // passing your own best, mid-game
+    G.hsBeat = true;
+    banner('NEW HIGH SCORE!', { c: ROWS.green, s: 3, dur: 2.2, y: 58 });
+    Sound.fx.key(); confettiPuff();
+    announce('New high score!');
+  }
+}
+// a right answer: points, the streak, and the "+540" that floats up from the barrel
+function awardHit(x) {
+  const tier = G.q ? G.q.tier : 0, base = TIER_PTS[tier] || 100;
+  const speed = Math.round((base * clamp(G.fireLeft || 0, 0, 1)) / 10) * 10;
+  const was = streakMult(G.streak);
+  G.streak++; G.rights++; G.bestStreak = Math.max(G.bestStreak, G.streak);
+  if (G.fireRT != null) G.fastest = G.fastest == null ? G.fireRT : Math.min(G.fastest, G.fireRT);
+  const mult = streakMult(G.streak), boss = G.mode === 'boss' ? 500 : 0, pts = (base + speed) * mult + boss;
+  G.lastAward = pts;
+  addScore(pts);
+  popScore('+' + fmt(pts), x, 176, null, true);
+  // how it added up, under the RIGHT! banner: it teaches that speed and streaks pay
+  banner(TIER_NAME[tier] + ' ' + base + (speed ? ' + FAST ' + speed : '') + (mult > 1 ? '  X' + mult : '') + (boss ? ' + BOSS 500' : ''), { c: '#ffffff', s: G.uiS, dur: 1.6, y: G.mode === 'boss' ? 186 : 138 });
+  if (mult > was) { banner(MULT_BANNER[mult], { c: mult >= 4 ? ROWS.fire : ROWS.gold, s: 2, dur: 1.6, y: 86 }); Sound.fx.newgun(); }
+  announce('Right! Plus ' + pts + ' points. Score ' + G.score + '.');
+}
+function loseStreak() {
+  if (G.streak >= 3) banner('STREAK LOST!', { c: ROWS.red, s: 2, dur: 1.5, y: 86 });
+  G.streak = 0;
+}
+function stageClearBonus() {
+  if (G.clearPaid) return;
+  G.clearPaid = true; addScore(1000);
+  popScore('+1,000', W / 2, 214, 'CHAD MODE CLEARED');
+}
+// "+540": a fly pop bounces up from the barrel, then flies into the score counter, which counts up as it lands.
+// The breakdown ("HARD 300 + FAST 240 X2") stays where it appeared for a moment. A pop without fly just floats up.
+const POP_FLY = 0.3, POP_LAND = 0.85;
+function popScore(txt, x, y, sub, fly = false) { G.pops.push({ txt, sub, x, y, t: 0, dur: fly ? 1.5 : 1.7, fly }); }
+const popsFlying = () => G.pops.some(p => p.fly && p.t < POP_LAND);
+function drawPops(g) {
+  for (const p of G.pops) {
+    const w = textImg(p.txt, 3, ROWS.gold, '#14101f', '#000000').width, x0 = clamp(p.x, w / 2 + 4, W - w / 2 - 4);
+    if (p.sub) {
+      const s = G.uiS, sw = textImg(p.sub, s, '#ffffff', '#14101f', '#000000').width, k = p.t / p.dur;
+      g.globalAlpha = k > 0.7 ? clamp(1 - (k - 0.7) / 0.3, 0, 1) : 1;
+      text(g, p.sub, clamp(p.x, sw / 2 + 4, W - sw / 2 - 4), p.y + 26, { s, c: '#ffffff', al: 'c', sh: '#000000' });
+      g.globalAlpha = 1;
+    }
+    if (p.fly) {
+      if (p.t >= POP_LAND) continue;
+      const bounce = p.t < 0.2 ? Math.max(0.05, easeBack(p.t / 0.2)) : 1;
+      if (p.t < POP_FLY) { text(g, p.txt, x0, Math.round(p.y - 8 * easeOut(p.t / POP_FLY)), { s: 3, c: ROWS.gold, al: 'c', sh: '#000000', sc: bounce }); continue; }
+      const k = easeIn((p.t - POP_FLY) / (POP_LAND - POP_FLY));
+      text(g, p.txt, lerp(x0, W / 2, k), Math.round(lerp(p.y - 8, 2, k)), { s: 3, c: ROWS.gold, al: 'c', sh: '#000000', sc: lerp(1, 0.55, k) });
+      continue;
+    }
+    const k = p.t / p.dur, y = Math.round(p.y - easeOut(Math.min(1, k * 1.6)) * 34);
+    g.globalAlpha = k > 0.75 ? clamp(1 - (k - 0.75) / 0.25, 0, 1) : 1;
+    text(g, p.txt, x0, y, { s: 3, c: ROWS.gold, al: 'c', sh: '#000000', sc: p.t < 0.22 ? Math.max(0.05, easeBack(p.t / 0.22)) : 1 });
+    g.globalAlpha = 1;
+  }
+}
+function confettiPuff() {
+  for (let i = 0; i < 40; i++) spawn({ view: 'ui', x: W / 2 + rand(-80, 80), y: 24, vx: rand(-150, 150), vy: rand(-170, -40), g: 260, life: 1.8, s: randi(2, 4), c: pick(['#ff4f8a', '#ffd24a', '#5ec8ff', '#7dff9a', '#ffffff']), type: 'confetti', vr: rand(-8, 8), fade: false });
+}
+// the score, top middle, and under it the streak once it is worth something
+function drawScoreHUD(g) {
+  const bump = G.scoreBump != null ? clamp(1 - (G.time - G.scoreBump) / 0.3, 0, 1) : 0;   // a little swell as points land
+  text(g, fmt(G.scoreShown), W / 2, 6, { s: 2, c: G.hsBeat ? ROWS.green : ROWS.gold, al: 'c', sc: 1 + 0.35 * bump });
+  if (G.streak >= 2) {
+    const m = streakMult(G.streak), c = m >= 4 ? (Math.floor(G.time * 8) % 2 ? ROWS.fire : ROWS.gold) : m >= 2 ? ROWS.fire : '#ffffff';
+    text(g, 'STREAK ' + G.streak + (m > 1 ? '  X' + m : ''), W / 2, 24, { s: G.uiS, c, al: 'c' });
+  }
+}
+const runStats = () => G.rights + ' RIGHT · BEST STREAK ' + G.bestStreak + (G.fastest != null ? ' · FASTEST ' + G.fastest.toFixed(1) + 'S' : '');
+// Daily Octo HUD, top right: a square per clue, filled in as you go (the current one blinks)
+function drawDailyGrid(g) {
+  const D = G.daily, n = DAILY_PLAN.length, sz = G.uiS > 1 ? 11 : 9, gap = 3, total = n * sz + (n - 1) * gap + 4;
+  let x = W - 8 - total;
+  for (let i = 0; i < n; i++) {
+    if (i === 5) x += 4;
+    const r = D.results[i], cur = i === D.round && !r;
+    g.fillStyle = '#14101f'; g.fillRect(x - 1, 7, sz + 2, sz + 2);
+    g.fillStyle = r === 'g' ? '#39ff6a' : r === 'y' ? '#ffd24a' : r === 'r' ? '#ff3b3b' : cur ? (Math.floor(G.time * 4) % 2 ? '#ffffff' : '#5a4f80') : '#2b2052';
+    g.fillRect(x, 8, sz, sz);
+    x += sz + gap;
+  }
+}
+
+/* ---------- the high-score table (top 5, on this device) ---------- */
+function highScores() {
+  const a = Store.get('octrivia-scores', []);
+  return Array.isArray(a) ? a.filter(e => e && typeof e.s === 'number' && e.s > 0).sort((x, y) => y.s - x.s).slice(0, 5) : [];
+}
+function bestScore() { const a = highScores(); return a.length ? a[0].s : 0; }
+function saveHighScore(entry) {
+  const top = highScores().concat([entry]).sort((a, b) => b.s - a.s).slice(0, 5);
+  Store.set('octrivia-scores', top);
+  return top.indexOf(entry) + 1;   // 0 when it did not make the top 5
+}
+// end of a normal game (eaten, or the boss beaten): bonuses, then into the table
+function finishRun(won) {
+  if (G.daily || G.runSaved) return;
+  G.runSaved = true; G.prevBest = bestScore();
+  if (won) { G.preBonus = G.score; G.bonus = { boss: 2000, credits: G.coins * 1000 }; G.score += G.bonus.boss + G.bonus.credits; G.scoreShown = G.score; }
+  G.finalRank = G.score > 0 ? saveHighScore({ s: G.score, hero: G.hero, won: !!won, d: localDay(), streak: G.bestStreak }) : 0;
+  G.newBest = G.score > 0 && G.score > G.prevBest;
+}
+function drawHighScoreTable(g, a) {
+  const list = highScores(), us = G.uiS, rowH = 7 * us + 6, top = 136, h = 30 + 5 * rowH;
+  g.globalAlpha = 0.88 * a; g.fillStyle = '#07051a'; g.fillRect(110, top, 420, h); g.globalAlpha = a;
+  g.fillStyle = '#ffd24a'; g.fillRect(110, top, 420, 2); g.fillRect(110, top + h - 2, 420, 2);
+  text(g, 'HIGH SCORES', W / 2, top + 7, { s: 2, c: ROWS.gold, al: 'c' });
+  for (let i = 0; i < 5; i++) {
+    const e = list[i], y = top + 28 + i * rowH, col = i === 0 ? ROWS.gold : '#ffffff';
+    text(g, (i + 1) + '.', 132, y, { s: us, c: col });
+    text(g, e ? fmt(e.s) : '-----', 290, y, { s: us, c: col, al: 'r' });
+    if (e) text(g, (CHARS[e.hero] ? CHARS[e.hero].name : 'HERO') + (e.won ? ' *' : ''), 306, y, { s: us, c: e.won ? ROWS.gold : '#c9c2ff' });
+  }
+  g.globalAlpha = 1;
+}
+function drawGameOverScore(g, t) {   // t: seconds since the panel appeared
+  const us = G.uiS, a = clamp(t / 0.3, 0, 1);
+  g.globalAlpha = 0.92 * a; g.fillStyle = '#07051a'; g.fillRect(60, 96, 520, 76); g.globalAlpha = a;
+  text(g, 'SCORE ' + fmt(Math.round(G.score * clamp(t / 0.8, 0, 1))), W / 2, 102, { s: 3, c: ROWS.gold, al: 'c', sh: '#000000' });
+  if (t > 0.9) {
+    if (G.newBest) { if (Math.floor(t * 4) % 2 === 0) text(g, 'NEW HIGH SCORE!', W / 2, 128, { s: 2, c: ROWS.green, al: 'c', sh: '#000000' }); }
+    else text(g, G.finalRank ? 'NO. ' + G.finalRank + ' ON THIS DEVICE' : 'HIGH SCORE ' + fmt(G.prevBest), W / 2, 128, { s: 2, c: '#ffffff', al: 'c', sh: '#000000' });
+    text(g, runStats(), W / 2, 150, { s: us, c: '#c9c2ff', al: 'c' });
+  }
+  g.globalAlpha = 1;
+}
+function drawVictoryScore(g, t) {   // t: seconds since the tally started
+  const us = G.uiS, b = G.bonus || { boss: 0, credits: 0 };
+  const a = t > 8.3 ? clamp(1 - (t - 8.3) / 0.5, 0, 1) : clamp(t / 0.3, 0, 1);
+  g.globalAlpha = 0.82 * a; g.fillStyle = '#07051a'; g.fillRect(60, 88, 520, 150); g.globalAlpha = a;
+  text(g, 'SCORE ' + fmt(G.preBonus), W / 2, 96, { s: 2, c: '#ffffff', al: 'c' });
+  if (t > 0.6) text(g, 'BOSS BEATEN  +' + fmt(b.boss), W / 2, 118, { s: us, c: ROWS.gold, al: 'c' });
+  if (t > 1.2) text(g, 'CREDITS LEFT ' + G.coins + '  +' + fmt(b.credits), W / 2, 136, { s: us, c: ROWS.gold, al: 'c' });
+  if (t > 1.8) text(g, 'TOTAL ' + fmt(lerp(G.preBonus, G.score, clamp((t - 1.8) / 0.9, 0, 1))), W / 2, 158, { s: 4, c: ROWS.gold, al: 'c', sh: '#000000' });
+  if (t > 2.9) {
+    if (G.newBest) { if (Math.floor(t * 4) % 2 === 0) text(g, 'NEW HIGH SCORE!', W / 2, 194, { s: 2, c: ROWS.green, al: 'c', sh: '#000000' }); }
+    else text(g, G.finalRank ? 'NO. ' + G.finalRank + ' ON THIS DEVICE' : 'HIGH SCORE ' + fmt(G.prevBest), W / 2, 194, { s: 2, c: '#ffffff', al: 'c' });
+    text(g, runStats(), W / 2, 216, { s: us, c: '#c9c2ff', al: 'c' });
+  }
+  g.globalAlpha = 1;
+}
+
+/* ---------- the Daily Octo ---------- */
+const DAILY_PLAN = [['chad', 0], ['chad', 0], ['chad', 1], ['chad', 1], ['chad', 2], ['demon', 0], ['demon', 1], ['demon', 1], ['demon', 2], ['boss', 2]];
+const DAILY_EPOCH = Date.UTC(2026, 9, 22);   // Daily Octo #1 was 22 October 2026
+const DEMON_OF = { trump: 'slayer', spidey: 'marvel', jerry: 'messi' };   // your Chad Mode hero's Demon Time partner
+const DAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+const pad2 = n => String(n).padStart(2, '0');
+// the player's own calendar day, like a newspaper puzzle (G.dayOverride is for tests)
+function localDay(d) {
+  if (!d && G.dayOverride) return G.dayOverride;
+  d = d || new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+const dayParts = s => { const [y, m, d] = s.split('-').map(Number); return { y, m, d }; };
+function dayBefore(s) { const { y, m, d } = dayParts(s); return localDay(new Date(y, m - 1, d - 1)); }
+function dailyNumber(s) { const { y, m, d } = dayParts(s); return Math.max(1, Math.round((Date.UTC(y, m - 1, d) - DAILY_EPOCH) / 86400000) + 1); }
+function dayLabel(s) { const { y, m, d } = dayParts(s); return DAYS[new Date(y, m - 1, d).getDay()] + ' ' + d + ' ' + MONTHS[m - 1]; }
+function untilTomorrow() {
+  const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1), s = Math.max(0, Math.floor((next - now) / 1000));
+  return pad2(Math.floor(s / 3600)) + ':' + pad2(Math.floor(s / 60) % 60) + ':' + pad2(s % 60);
+}
+function seededRand(str) {   // FNV-1a hash of the text, then mulberry32
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  let a = h >>> 0;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+// The day's 10 questions. The same for everyone: every random choice comes from a generator seeded with the date.
+// No country is the answer twice in one day.
+function dailyQuestions(day) {
+  const r = seededRand('octrivia-daily|' + day), used = new Set(), out = [];
+  const rpick = a => a[Math.floor(r() * a.length)];
+  const rshuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  for (const [list, tier] of DAILY_PLAN) {
+    const pool = list === 'boss' ? BOSS_POOL : TRIVIA[list].map(p => [p]), n = CFG.barrels[list];
+    const target = Math.floor(r() * n), ans = rpick(pool.filter(e => !used.has(e[0].name))), entry = rpick(ans);
+    used.add(entry.name);
+    const others = rshuffle(pool.filter(e => e !== ans)).slice(0, n - 1).map(e => e[0].name);
+    const labels = [];
+    for (let i = 0, k = 0; i < n; i++) labels.push(i === target ? entry.name : others[k++]);
+    out.push({ list, target, q: { answer: entry.name, clue: entry.clues[tier], tier, labels } });
+  }
+  return out;
+}
+const dailyQ = () => G.daily.qs[G.daily.round];
+function dailyState() {
+  const st = Store.get('octrivia-daily', null), base = { streak: 0, last: null, best: 0, days: {} };
+  return st && typeof st === 'object' ? Object.assign(base, st, { days: st.days && typeof st.days === 'object' ? st.days : {} }) : base;
+}
+const liveStreak = (st, today) => (st.last === today || st.last === dayBefore(today) ? st.streak | 0 : 0);   // alive if played today or yesterday
+function dailyRun(today) {
+  const run = Store.get('octrivia-daily-run', null);
+  return run && run.date === today && run.round > 0 && run.round < DAILY_PLAN.length ? run : null;
+}
+function saveDailyRun() {
+  const D = G.daily;
+  Store.set('octrivia-daily-run', { date: D.date, n: D.n, round: D.round, results: D.results.slice(0, D.round), hero: D.hero, gun: D.gun, score: G.score, streak: G.streak, bestStreak: G.bestStreak, rights: G.rights, fastest: G.fastest });
+}
+// DAILY OCTO on the title: today's result if it is done, carry on if it is half done, else pick a hero and go
+function openDaily() {
+  Sound.unlock(); Sound.fx.coin();
+  const today = localDay(), st = dailyState();
+  if (st.days[today]) { G.dailyView = Object.assign({}, st.days[today], { streak: liveStreak(st, today), fresh: false }); setState('DAILYEND'); return; }
+  const run = dailyRun(today);
+  resetRun();
+  if (run) { resumeDaily(run); return; }
+  G.dailyPending = true;
+  Sound.music('chad');
+  startSelect('chad');
+}
+function beginDaily(hero) {
+  const today = localDay();
+  G.dailyPending = false;
+  G.daily = { date: today, n: dailyNumber(today), qs: dailyQuestions(today), round: 0, results: [], hero, gun: 0 };
+  announce('Daily Octo number ' + G.daily.n + '. Ten clues, and every one counts.');
+  dailyEnterRound();
+}
+function resumeDaily(run) {
+  G.daily = { date: run.date, n: run.n, qs: dailyQuestions(run.date), round: run.round, results: Array.isArray(run.results) ? run.results.slice(0, run.round) : [], hero: DEMON_OF[run.hero] ? run.hero : 'spidey', gun: clamp(run.gun | 0, 0, 3) };
+  Object.assign(G, { score: run.score | 0, scoreShown: run.score | 0, streak: run.streak | 0, bestStreak: run.bestStreak | 0, rights: run.rights | 0, fastest: typeof run.fastest === 'number' ? run.fastest : null });
+  const list = dailyQ().list;
+  if (list !== 'boss') Sound.music(list);
+  banner('WELCOME BACK!', { c: ROWS.gold, s: 4, dur: 1.8, y: 112 });
+  announce('Welcome back. Carrying on from clue ' + (run.round + 1) + ' of ' + DAILY_PLAN.length + '.');
+  dailyEnterRound();
+}
+// set up the stage for the current clue: the start, a resume, or the first Demon Time clue after the gate
+function dailyEnterRound() {
+  const D = G.daily, list = dailyQ().list, hero = list === 'chad' ? D.hero : DEMON_OF[D.hero];
+  G.hero = hero;
+  if (list === 'boss') { setState('BOSSINTRO'); return; }
+  Object.assign(G, { mode: list, keys: 0, gun: list === 'demon' ? D.gun : 0, coins: CFG.coins, firstRound: true, lastResult: null, freed: [], hs: null });
+  G.hostage = list === 'chad' ? PAIR[hero] : nextCaptive();
+  G.barrels = makeBarrels(list);
+  setState('INTRO');
+}
+// after each clue's result: save, then on to the next clue (through the Demon Time gate and the boss's entrance)
+function dailyAfterRound() {
+  const D = G.daily, prev = dailyQ().list, hit = G.lastResult === 'hit';
+  if (hit && prev === 'demon') D.gun = Math.min(D.gun + 1, 3);
+  D.round++;
+  if (D.round >= DAILY_PLAN.length) { finishDaily(); return; }
+  saveDailyRun();
+  const next = dailyQ().list;
+  if (prev === 'chad' && next !== 'chad') { setState('UNLOCK'); return; }   // finishUnlock comes back to dailyEnterRound
+  if (next === 'boss') { G.hero = DEMON_OF[D.hero]; setState('BOSSINTRO'); return; }
+  if (prev === 'chad') { if (hit) setHS('free'); setState('INTRO'); return; }   // the octopus snatches the hostage back
+  if (hit) {   // Demon Time: a right answer frees the captive, earns the next gun, and the octopus grabs someone new
+    if (G.hs) G.freed.push(Object.assign({}, G.hs, { state: 'leaving', t: 0 }));   // the freed captive runs off
+    G.hostage = nextCaptive(); G.firstRound = true; G.gun = D.gun;
+    banner('NEW GUN! ' + GUNS[currentGun()].name, { c: ROWS.fire, s: 2, dur: 1.8, y: 196 }); Sound.fx.newgun();
+  }
+  setState('INTRO');
+}
+function finishDaily() {
+  const D = G.daily, st = dailyState();
+  const res = Array.from({ length: DAILY_PLAN.length }, (_, i) => (D.results[i] === 'g' || D.results[i] === 'y' ? D.results[i] : 'r'));
+  const rec = { date: D.date, n: D.n, score: G.score, res, right: res.filter(r => r !== 'r').length, bestStreak: G.bestStreak, fastest: G.fastest, hero: D.hero };
+  if (st.last !== D.date) st.streak = st.last === dayBefore(D.date) ? (st.streak | 0) + 1 : 1;
+  st.last = D.date; st.best = Math.max(st.best | 0, G.score);
+  st.days[D.date] = rec;
+  const keep = Object.keys(st.days).sort().slice(-60);
+  st.days = Object.fromEntries(keep.map(k => [k, st.days[k]]));
+  Store.set('octrivia-daily', st); Store.del('octrivia-daily-run');
+  G.dailyView = Object.assign({}, rec, { streak: st.streak, fresh: true });
+  G.daily = null;
+  setState('DAILYEND');
+}
+
+/* ---------- sharing the result ---------- */
+const SQ = { g: '\u{1F7E9}', y: '\u{1F7E8}', r: '\u{1F7E5}' };
+function shareUrl() {
+  const local = !/^https?:$/.test(location.protocol) || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  return local ? 'https://workexperiencedts.github.io/octrivia/' : location.origin + location.pathname;
+}
+function dailyShareText(v) {
+  const sq = v.res.map(r => SQ[r] || SQ.r);
+  return 'Octrivia Daily #' + v.n + ' \u{1F419}\n' + v.right + '/' + v.res.length + ' · ' + fmt(v.score) + ' points\n' +
+    sq.slice(0, 5).join('') + ' ' + sq.slice(5).join('') + (v.streak > 1 ? '\nDay streak: ' + v.streak + ' \u{1F525}' : '') + '\n' + shareUrl();
+}
+async function copyText(t) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(t); return true; } } catch (e) { /* not allowed: try the old way */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove();
+    return !!ok;
+  } catch (e) { return false; }
+}
+// Phones and iPads open the share sheet (WhatsApp, Messages, Teams...); computers copy the result to paste anywhere.
+async function shareDaily() {
+  const v = G.dailyView; if (!v || G.sharing) return;
+  G.sharing = true;
+  const text = dailyShareText(v);
+  Sound.fx.select();
+  try {
+    if (G.touchUI && navigator.share) {
+      try { await navigator.share({ text }); note('SHARED! SEE IF THEY CAN BEAT YOU'); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }   // they closed the share sheet
+    }
+    note((await copyText(text)) ? 'COPIED! PASTE IT INTO WHATSAPP OR TEAMS' : 'COULD NOT COPY: TAKE A SCREENSHOT INSTEAD');
+  } finally { G.sharing = false; }
+  function note(msg) { G.shareNote = msg; G.shareNoteAt = G.time; announce(msg.toLowerCase()); }
+}
+
+/* ---------- the result screen ---------- */
+const DE_SHARE = { x: 246, y: 226, w: 132, h: 32 }, DE_DONE = { x: 394, y: 226, w: 132, h: 32 };
+ENTER.DAILYEND = () => {
+  const v = G.dailyView;
+  Object.assign(G, { shareNote: '', bubbles: [], banners: [], pops: [], hs: null, freed: [], prize: null, deadline: null });
+  G.octo.vis = false;
+  setShootReady(true); Sound.music(null);
+  if (v.fresh) { if (v.right >= 5) Sound.fx.fanfare(); else Sound.fx.laugh(0); }
+  announce('Daily Octo ' + v.n + ': ' + v.right + ' out of ' + v.res.length + ' right, ' + v.score + ' points. Press Shoot to share your result.');
+};
+UPDATE.DAILYEND = () => {
+  const v = G.dailyView, t = G.st;
+  v.res.forEach((r, i) => { if (t > 0.5 + i * 0.13 && once('sq' + i)) Sound.tone({ f: r === 'r' ? 220 : r === 'y' ? 520 : 780, d: 0.07, v: 0.12 }); });
+  if (v.fresh && t > 1.9 && once('party') && v.right >= 7) confettiPuff();
+  if (t > 2.4 && once('music')) Sound.music('victory');
+};
+function drawFlame(g, x, y, s) {   // a little pixel flame for the day streak
+  const rows = ['..#..', '.##..', '.###.', '#####', '##.##', '##.##', '.###.'];
+  rows.forEach((row, j) => { for (let i = 0; i < 5; i++) if (row[i] === '#') { g.fillStyle = j > 3 && i > 0 && i < 4 ? '#ffd24a' : '#ff5a1a'; g.fillRect(x + i * s, y + j * s, s, s); } });
+}
+function deButton(g, b, label, gold) {
+  const x = b.x - b.w / 2, y = b.y - b.h / 2, pulse = gold && Math.floor(G.time * 3) % 2;
+  g.fillStyle = '#14101f'; g.fillRect(x - 2, y - 2, b.w + 4, b.h + 4);
+  g.fillStyle = gold ? (pulse ? '#ffe48a' : '#ffd24a') : '#2b2052'; g.fillRect(x, y, b.w, b.h);
+  g.fillStyle = gold ? '#a8741a' : '#4a3d82'; g.fillRect(x, y + b.h - 4, b.w, 4);
+  text(g, label, b.x, b.y - 9, { s: 2, c: gold ? '#3a2a08' : '#ffffff', al: 'c', o: null });
+}
+function drawDailyEnd(g) {
+  const v = G.dailyView, t = G.st, us = G.uiS;
+  g.drawImage(bgTitle(), 0, 0);
+  text(g, 'DAILY OCTO #' + v.n, W / 2, 10, { s: 4, c: ROWS.gold, al: 'c', sh: '#000000' });
+  text(g, dayLabel(v.date), W / 2, 44, { s: us, c: '#c9c2ff', al: 'c' });
+  // the squares pop in one by one: Chad Mode, a gap, then Demon Time and the boss
+  const n = v.res.length, sz = 26, gap = 6, split = 10, total = n * sz + (n - 1) * gap + split;
+  let x = Math.round(W / 2 - total / 2);
+  for (let i = 0; i < n; i++) {
+    if (i === 5) x += split;
+    const k = clamp((t - 0.5 - i * 0.13) / 0.18, 0, 1), r = v.res[i];
+    if (k > 0) {
+      const w = Math.max(2, Math.round(sz * Math.max(0.05, easeBack(k)))), x0 = Math.round(x + sz / 2 - w / 2), y0 = Math.round(77 - w / 2);
+      g.fillStyle = '#14101f'; g.fillRect(x0 - 2, y0 - 2, w + 4, w + 4);
+      g.fillStyle = r === 'g' ? '#39ff6a' : r === 'y' ? '#ffd24a' : '#ff3b3b'; g.fillRect(x0, y0, w, w);
+      g.fillStyle = r === 'g' ? '#b8ffc8' : r === 'y' ? '#fff3a6' : '#ff9a9a'; g.fillRect(x0, y0, w, Math.max(1, Math.round(w * 0.18)));
+    }
+    x += sz + gap;
+  }
+  const after = 0.5 + n * 0.13;
+  if (t > after) {
+    text(g, v.right + '/' + n + ' RIGHT', W / 2, 100, { s: 2, c: '#ffffff', al: 'c', sh: '#000000' });
+    text(g, 'SCORE ' + fmt(v.score * clamp((t - after) / 0.9, 0, 1)), W / 2, 122, { s: 4, c: ROWS.gold, al: 'c', sh: '#000000' });
+    text(g, 'BEST STREAK ' + v.bestStreak + (v.fastest != null ? ' · FASTEST ' + v.fastest.toFixed(1) + 'S' : ''), W / 2, 158, { s: us, c: '#c9c2ff', al: 'c' });
+    const streakTxt = v.streak > 1 ? 'DAY STREAK ' + v.streak : 'DAY 1 OF YOUR STREAK: COME BACK TOMORROW!';
+    const sw = text(g, streakTxt, W / 2 + (v.streak > 1 ? 10 : 0), 180, { s: v.streak > 1 ? 2 : us, c: v.streak > 1 ? ROWS.fire : '#ffd27a', al: 'c' });
+    if (v.streak > 1) drawFlame(g, Math.round(W / 2 + 10 - sw / 2 - 18), 179, 2);
+    deButton(g, DE_SHARE, 'SHARE', true);
+    deButton(g, DE_DONE, 'DONE', false);
+    if (G.shareNote && G.time - G.shareNoteAt < 5) text(g, G.shareNote, W / 2, 250, { s: us, c: '#7dff9a', al: 'c', sh: '#000000' });
+    else text(g, G.touchUI ? 'TAP SHARE TO CHALLENGE YOUR FRIENDS' : 'PRESS SHOOT OR CLICK SHARE TO CHALLENGE FRIENDS', W / 2, 250, { s: us, c: '#c9c2ff', al: 'c' });
+    text(g, 'NEXT DAILY OCTO IN ' + untilTomorrow(), W / 2, 272, { s: us, c: '#ffffff', al: 'c' });
+  }
+  // a little cast: your hero cheering (or not), and the octopus
+  const good = v.right >= 5, hop = good ? Math.abs(Math.sin(t * 7)) * 8 : 0;
+  drawChar(g, CHARS[v.hero] ? v.hero : 'spidey', 70, 340 - hop, 2, { mood: good ? 'happy' : 'sad', cheer: good && Math.floor(t * 4) % 2 === 0, blink: blinkAt(t, 1) });
+  drawChar(g, 'octo', 570, 342 + Math.round(Math.sin(t * 2.4) * 2), 2, { mood: good ? 'dizzy' : 'laugh', tf: Math.floor(t * 6) % 4 });
+}
+function dailyEndPointer(x, y) { if (inBtn(DE_DONE, x, y)) { Sound.fx.blip(); setState('TITLE'); } }
+
+/* ---------- the title menu: PLAY, DAILY OCTO, and the best score ---------- */
+function titleStatus() {
+  const today = localDay(), st = dailyState(), done = !!st.days[today], run = !done && dailyRun(today), streak = liveStreak(st, today);
+  return {
+    done, run, streak, best: bestScore(),
+    daily: done ? 'DONE TODAY · NEXT ONE IN ' + untilTomorrow() : run ? 'CARRY ON FROM CLUE ' + (run.round + 1) + ' OF ' + DAILY_PLAN.length
+      : streak > 0 ? 'NEW PUZZLE! KEEP YOUR ' + streak + '-DAY STREAK GOING' : 'A NEW PUZZLE EVERY DAY',
+  };
+}
+function drawTitleMenu(g, t) {
+  const us = G.uiS, s = titleStatus(), n = dailyNumber(localDay());
+  TITLE_MENU.forEach((label, i) => {
+    const on = i === G.menuSel, txt = i === 1 ? label + ' #' + n : label;
+    text(g, (on ? '> ' : '  ') + txt + (on ? ' <' : '  '), W / 2, TITLE_MENU_Y[i], { s: 2, c: on ? ROWS.gold : '#ffffff', al: 'c', sh: '#000000' });
+  });
+  if (s.done || s.run || Math.floor(t * 2) % 3) text(g, s.daily, W / 2, TITLE_MENU_Y[1] + 18, { s: us, c: s.done ? '#7dff9a' : '#ffd27a', al: 'c', sh: '#000000' });
+  if (Math.floor(t * 2) % 2 === 0) centerHint(g, G.touchUI ? 'INSERT COIN: TAP PLAY OR DAILY OCTO' : 'INSERT COIN: CLICK ONE, OR ARROWS AND SHOOT', 206, '#c9c2ff');
+  if (s.best > 0) text(g, 'HIGH SCORE ' + fmt(s.best), W / 2, 226, { s: us, c: ROWS.gold, al: 'c', sh: '#000000' });
+}
+// a tap or click on the title: on a menu line picks it, anywhere else starts the one that is selected
+function titlePointer(x, y) {
+  if (Math.abs(x - W / 2) < 230) { if (y >= 134 && y < 162) G.menuSel = 0; else if (y >= 162 && y < 202) G.menuSel = 1; }
+  onShoot();
 }
 
 /* =====================================================================
@@ -3816,8 +4333,9 @@ function onShoot() {
   Sound.unlock();
   if (G.paused) { if (G.menu === 'pause') togglePause(false); return; }
   switch (G.state) {
-    case 'TITLE': insertCoin(); break;
+    case 'TITLE': if (G.menuSel === 1) openDaily(); else insertCoin(); break;
     case 'COIN': if (G.st > 0.3) startSelect('chad'); break;
+    case 'DAILYEND': shareDaily(); break;
     case 'MP':
       if (MP.ui === 'lobby') mpHostStart();
       else if (MP.S && MP.S.phase === 'end') mpPlayAgain();
@@ -3832,7 +4350,7 @@ function onShoot() {
     case 'NEWGUN': if (G.st > 1.0) finishNewGun(); break;
     case 'UNLOCK': if (G.st > 1.2) finishUnlock(); break;
     case 'BOSSINTRO': if (G.st > 3.0) setState('HIDE'); break;
-    case 'GAMEOVER': if (G.st > 4.2) setState('TITLE'); break;
+    case 'GAMEOVER': if (G.st > 4.2) insertCoin(); break;   // straight into another go, same hero picked
     case 'VICTORY': if (G.st > 4) setState('TITLE'); break;
   }
 }
@@ -3855,11 +4373,13 @@ cv.addEventListener('pointerdown', e => {
   e.preventDefault();
   try { window.focus(); } catch (err) { /* keep keyboard working inside the artifact frame */ }
   Sound.unlock();
-  G.inputMode = e.pointerType === 'mouse' ? 'mouse' : 'touch';
+  G.inputMode = e.pointerType === 'mouse' ? 'mouse' : 'touch'; G.idleAt = G.time;
   const p = toGame(e), slack = G.inputMode === 'touch' ? 10 : 0;   // fingers are less exact than a mouse
   if (arcIncomingPointer(p.x, p.y)) return;
   if (G.paused) return;   // the pause menu or sound panel is open on top
   if (G.state === 'MP') { mpPointer(p.x, p.y); return; }
+  if (G.state === 'TITLE') { titlePointer(p.x, p.y); return; }
+  if (G.state === 'DAILYEND') { dailyEndPointer(p.x, p.y); return; }   // SHARE is on 'click' below: a share sheet needs a full tap
   if (G.state === 'SELECT') {
     const i = heroAt(p.x, p.y);
     if (i >= 0 && !G.chosen) chooseHero(i);
@@ -3889,6 +4409,9 @@ cv.addEventListener('pointermove', e => {
   else if (G.state === 'SELECT' && !G.chosen) { const i = heroAt(p.x, p.y); if (i >= 0 && i !== G.heroSel) { G.heroSel = i; Sound.fx.blip(); } }
 });
 cv.addEventListener('contextmenu', e => e.preventDefault());
+// SHARE on the daily result screen. On a click, not a pointerdown: phones only open the share sheet
+// (and allow copying) from a whole tap, which pointerdown alone is not.
+cv.addEventListener('click', e => { if (G.state === 'DAILYEND' && !G.paused) { const p = toGame(e); if (inBtn(DE_SHARE, p.x, p.y)) shareDaily(); } });
 
 function pressShootLook() { shootBtn.classList.add('down'); setTimeout(() => shootBtn.classList.remove('down'), 120); }
 shootBtn.addEventListener('pointerdown', e => {
@@ -3902,6 +4425,7 @@ const stick = document.getElementById('stick');
 function tiltStick(dx, dy) { stick.style.setProperty('--tilt', (dx * 18 + (dy ? 0 : 0)) + 'deg'); clearTimeout(tiltStick.t); tiltStick.t = setTimeout(() => stick.style.setProperty('--tilt', '0deg'), 160); }
 addEventListener('keydown', e => {
   const k = e.key, onButton = e.target && e.target.tagName === 'BUTTON';
+  G.idleAt = G.time;
   // In the Portal, Escape closes the arcade like every other arcade game (P still pauses).
   // The iframe keeps the key, so the arcade window only hears it if we pass it on.
   if (k === 'Escape' && MP.inPortal) { e.preventDefault(); mpPost({ cvd: 'close' }); return; }
@@ -3932,12 +4456,12 @@ addEventListener('keydown', e => {
 const pauseMenu = document.getElementById('pauseMenu'), soundPanel = document.getElementById('soundPanel');
 const $ = id => document.getElementById(id);
 const pmRetry = $('pmRetry'), spMute = $('spMute'), spVol = $('spVol'), spVolOut = $('spVolOut'), spMusic = $('spMusic'), spFx = $('spFx');
-const IN_GAME = () => !['TITLE', 'COIN', 'SELECT', 'MP'].includes(G.state);
+const IN_GAME = () => !['TITLE', 'COIN', 'SELECT', 'MP', 'DAILYEND'].includes(G.state);
 function setMenu(m, focusId) {
   G.menu = m; G.paused = !!m;
   pauseMenu.hidden = m !== 'pause'; soundPanel.hidden = m !== 'sound';
   Sound.setPaused(m === 'pause');
-  pmRetry.hidden = !IN_GAME();
+  pmRetry.hidden = !IN_GAME() || !!G.daily;   // no retries in the Daily Octo: every clue counts
   if (m === 'sound') syncSoundPanel();
   if (m) { const f = $(focusId || (m === 'pause' ? 'pmResume' : 'spDone')); if (f) f.focus({ preventScroll: true }); }
   else if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
@@ -3953,9 +4477,10 @@ function closeSound() { setMenu(soundFrom === 'pause' ? 'pause' : null, soundFro
 // Start this stage again from its first question, with full credits and the same hero.
 function retryStage() {
   const mode = G.mode === 'boss' ? 'demon' : G.mode;
-  if (!IN_GAME() || !HEROES[mode].includes(G.hero)) return;   // nothing to retry yet (title or hero select)
+  if (G.daily || !IN_GAME() || !HEROES[mode].includes(G.hero)) return;   // nothing to retry yet (title or hero select)
   setMenu(null);
   Object.assign(G, { coins: CFG.coins, bossHits: 0, banners: [], bubbles: [], keyFly: null, shot: null, testShot: null, prize: null, captives: [], deadline: null, autoFire: false, timedOut: false });
+  Object.assign(G, { score: G.stageScore || 0, scoreShown: G.stageScore || 0, streak: 0, pops: [] });   // the score goes back to where the stage began
   G.octo.vis = false; parts.length = 0; FX.shake = 0; FX.flashA = 0;
   Sound.music(mode === 'chad' ? 'chad' : 'demon');
   beginMode(mode, G.hero);
@@ -4005,7 +4530,7 @@ function toggleFullscreen() {
 }
 btnFull.addEventListener('click', toggleFullscreen);
 $('pmFull').addEventListener('click', () => { toggleFullscreen(); togglePause(false); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && !['TITLE', 'GAMEOVER', 'VICTORY'].includes(G.state)) togglePause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && !['TITLE', 'GAMEOVER', 'VICTORY', 'DAILYEND'].includes(G.state)) togglePause(true); });
 
 /* ---------- fit the cabinet to the window ---------- */
 const room = document.getElementById('room'), cab = document.getElementById('cab');
@@ -4019,21 +4544,53 @@ const PAD_MSG = {
 };
 // With no SHOOT button on a phone or iPad, a tap on the pad (away from the answer buttons) does what SHOOT did:
 // start, skip the intro, carry on after a new gun or a stage, play again.
-padEl.addEventListener('click', e => { if (G.state !== 'WATCH' && G.state !== 'AIM' && !e.target.closest('button')) onShoot(); });
+padEl.addEventListener('click', e => { if (!['WATCH', 'AIM', 'DAILYEND', 'TITLE'].includes(G.state) && !e.target.closest('button')) onShoot(); });
 let padGridKey = '';
 function setText(el, s) { if (el.textContent !== s) el.textContent = s; }
+// the pad's two big buttons: PLAY / DAILY OCTO on the title, SHARE / DONE on the daily result
+function padDuo(key, items) {
+  padGrid.hidden = false; padGrid.classList.remove('heroes'); padGrid.classList.add('duo');
+  padTimer.style.visibility = 'hidden';
+  if (key !== padGridKey) {
+    padGridKey = key;
+    padGrid.replaceChildren(...items.map(([label, fn, gold]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.textContent = label; if (gold) btn.classList.add('go');
+      btn.addEventListener('click', () => { if (!G.paused) { Sound.unlock(); G.idleAt = G.time; fn(); } });
+      return btn;
+    }));
+  }
+}
 function syncPad() {
   if (!G.padOn) return;
-  padEl.classList.toggle('demon', G.mode !== 'chad' && G.state !== 'TITLE' && G.state !== 'COIN');
+  padEl.classList.toggle('demon', G.mode !== 'chad' && !['TITLE', 'COIN', 'DAILYEND'].includes(G.state));
+  if (G.state === 'TITLE') {
+    const s = titleStatus(), n = dailyNumber(localDay());
+    setText(padHead, 'PLAY, OR THE SAME 10 CLUES AS EVERYONE TODAY');
+    setText(padClue, (s.best > 0 ? 'HIGH SCORE ' + fmt(s.best) + ' · ' : '') + s.daily);
+    padDuo('title|' + n, [['PLAY', () => { G.menuSel = 0; onShoot(); }, false], ['DAILY OCTO #' + n, () => { G.menuSel = 1; onShoot(); }, true]]);
+    return;
+  }
+  if (G.state === 'DAILYEND') {
+    const v = G.dailyView;
+    setText(padHead, 'DAILY OCTO #' + v.n + ': ' + v.right + '/' + v.res.length + ' RIGHT, ' + fmt(v.score) + ' POINTS');
+    setText(padClue, G.shareNote && G.time - G.shareNoteAt < 5 ? G.shareNote : (v.streak > 1 ? 'DAY STREAK ' + v.streak + ' · ' : '') + 'NEXT ONE IN ' + untilTomorrow());
+    padDuo('dailyend', [['SHARE', shareDaily, true], ['DONE', () => setState('TITLE'), false]]);
+    return;
+  }
+  padGrid.classList.remove('duo');
   const live = G.state === 'WATCH' || G.state === 'AIM';
   const showQ = !!G.q && G.barrels.some(b => b.label) && ['HIDE', 'WATCH', 'AIM', 'SHOT', 'RESULT'].includes(G.state);
   // heading and clue
   if (showQ && G.state === 'RESULT') {
     const ans = G.q.answer;
-    setText(padHead, G.lastResult === 'hit' ? 'GOT IT! IT WAS ' + ans : G.timedOut ? 'TOO SLOW! IT WAS ' + ans : 'WRONG BARREL! IT WAS ' + ans);
+    setText(padHead, G.lastResult === 'hit' ? 'GOT IT! IT WAS ' + ans + (G.lastAward ? '  +' + fmt(G.lastAward) : '') : G.timedOut ? 'TOO SLOW! IT WAS ' + ans : 'WRONG BARREL! IT WAS ' + ans);
   } else setText(padHead, showQ ? (live ? 'WHERE IS THE OCTOPUS HIDING?' : G.state === 'SHOT' ? 'FIRE!' : 'GET READY...') : PAD_MSG[G.state] || '');
-  const stats = IN_GAME() && G.state !== 'VICTORY' ? 'KEYS ' + G.keys + '/' + CFG.keysNeeded + '   CREDITS ' + G.coins : '';
-  setText(padClue, showQ ? G.q.clue : G.mode === 'boss' ? 'HITS ' + G.bossHits + '/' + CFG.bossHits + '   CREDITS ' + G.coins : stats);
+  const sc = 'SCORE ' + fmt(G.score);
+  const stats = G.state === 'GAMEOVER' || G.state === 'VICTORY' ? sc + (G.newBest ? ' · NEW HIGH SCORE!' : G.finalRank ? ' · NO. ' + G.finalRank + ' ON THIS DEVICE' : '')
+    : !IN_GAME() ? '' : G.daily ? sc + ' · CLUE ' + Math.min(G.daily.round + 1, DAILY_PLAN.length) + ' OF ' + DAILY_PLAN.length
+    : G.mode === 'boss' ? sc + ' · HITS ' + G.bossHits + '/' + CFG.bossHits + ' · CREDITS ' + G.coins : sc + ' · KEYS ' + G.keys + '/' + CFG.keysNeeded + ' · CREDITS ' + G.coins;
+  setText(padClue, showQ ? G.q.clue : stats);
   // the shrinking timer line (same colours as the one on screen)
   const left = live && G.deadline != null ? clamp((G.deadline - G.time) / CFG.decideSeconds, 0, 1) : 0;
   padTimer.style.visibility = live ? 'visible' : 'hidden';
@@ -4137,9 +4694,9 @@ function layout() {
   cab.classList.toggle('nomq', !compact && !mqh);
   cab.classList.toggle('narrow', !compact && deckw < 440);
   sideL.hidden = sideR.hidden = !sidew;
-  // Phones and tablets get the big text: the small size is unreadable on a phone and tiny on an iPad held sideways.
-  const touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
-  G.uiS = sw < (touch ? 1100 : 760) ? 2 : 1;
+  // Big text unless the screen is really big: the small size is unreadable on a phone, tiny on an iPad held
+  // sideways, and only about 9px tall on a laptop (where the clue is the most important thing on screen).
+  G.uiS = sw < 1100 ? 2 : 1;
   G.portrait = !compact && ah > aw && aw < 700;
   requestAnimationFrame(() => { drawMarquee(); drawSideArt(); });
 }
@@ -4229,7 +4786,10 @@ function start(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 // handy for testing in the browser console; step(dt) runs one frame by hand (the loop stops in a hidden tab)
-window.__cvd = { G, setState, CFG, onShoot, chooseBarrel, retryStage, step(dt = 1 / 60) { if (!G.paused) update(dt); render(); syncPad(); } };
+window.__cvd = {
+  G, setState, CFG, onShoot, chooseBarrel, retryStage, openDaily, shareDaily, dailyQuestions, dailyShareText, highScores, Store, localDay,
+  step(dt = 1 / 60) { if (!G.paused) update(dt); render(); syncPad(); },
+};
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ muted: Sound.muted }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start);
 else start((window.claude && window.claude.hot && window.claude.hot.data) || {});
