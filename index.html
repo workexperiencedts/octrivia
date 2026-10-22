@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Octrivia"><meta name="theme-color" content="#0b0816"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
 <title>Octrivia</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,9 +42,11 @@
 }
 html { box-sizing: border-box; }
 html, body { height: 100%; }
+@supports (height: 100dvh) { html, body { height: 100dvh; } }   /* phones: the visible height, not behind the browser bars */
 body {
   margin: 0; background: var(--floor); color: var(--label); font-family: var(--font-pixel);
   overflow: hidden; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+  touch-action: manipulation; -webkit-touch-callout: none; overscroll-behavior: none; -webkit-text-size-adjust: 100%;
 }
 #room {
   box-sizing: border-box; height: 100%; display: grid; place-items: center;
@@ -124,9 +126,9 @@ body {
 }
 #minis { display: flex; flex-direction: column; gap: 8px; flex: none; }
 .mini {
-  font: inherit; font-size: clamp(7px, calc(var(--deck-h) * .07), 10px); color: var(--label);
+  font: inherit; font-size: clamp(8px, calc(var(--deck-h) * .068), 13px); color: var(--label);
   background: var(--cab); border: 2px solid var(--deck-hi); border-bottom-width: 4px; border-radius: 6px;
-  padding: 7px 10px; cursor: pointer; letter-spacing: .05em; min-width: 10.5em; touch-action: manipulation;
+  padding: .85em 1em; cursor: pointer; letter-spacing: .05em; min-width: 10.5em; touch-action: manipulation;
 }
 .mini:active { transform: translateY(2px); border-bottom-width: 2px; }
 .mini[aria-pressed="true"] { color: var(--gold); }
@@ -136,6 +138,65 @@ body {
 #cab.compact #deck { flex-direction: column; justify-content: center; gap: 14px; padding: 10px 8px; }
 #cab.narrow #stick { display: none; }
 #cab.narrow #deck { justify-content: space-around; }
+
+/* The answer pad: on a tall screen (phone or iPad held upright) the clue and one big button per barrel sit under the screen. */
+#cab.padded { grid-template-areas: "mq" "screen" "pad" "deck"; }
+#cab.nomq { grid-template-areas: "screen" "deck"; }
+#cab.nomq.padded { grid-template-areas: "screen" "pad" "deck"; }
+#cab.nomq #mq { display: none; }
+#pad {
+  grid-area: pad; box-sizing: border-box; width: var(--deck-w); height: var(--pad-h);
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
+  background: var(--bezel); border-radius: 12px; overflow: hidden;
+  box-shadow: inset 0 0 0 2px var(--bezel-line), 0 0 0 2px var(--cab-edge);
+}
+#padHead { margin: 0; flex: none; color: var(--gold); font-size: clamp(9px, 2.6vw, 14px); line-height: 1.5; text-align: center; }
+#padClue { margin: 0; flex: none; color: #ffffff; font-size: clamp(10px, 3vw, 16px); line-height: 1.6; text-align: center; }
+#padTimer { flex: none; height: 6px; border-radius: 3px; background: #14101f; overflow: hidden; }
+#padTimer span { display: block; height: 100%; width: 100%; margin: 0 auto; background: #7dff9a; }
+#padGrid {
+  flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(var(--pad-cols, 4), 1fr);
+  grid-auto-rows: minmax(38px, 76px); align-content: start; align-content: safe center; gap: 6px; overflow-y: auto;   /* scrolls only on the very smallest phones */
+}
+#padGrid button {
+  font: inherit; font-size: clamp(10px, 2.9vw, 14px); line-height: 1.4; letter-spacing: .02em;
+  color: #3a2410; background: #f4e2b8; border: 2px solid #6c3a18; border-bottom-width: 5px; border-radius: 7px;
+  padding: 4px 3px; cursor: pointer; overflow-wrap: anywhere; touch-action: manipulation;
+}
+#pad.demon #padGrid button { color: #ffd27a; background: #2a1416; border-color: #ff8a2a; }
+#padGrid button:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 3px; }
+#padGrid button:disabled { opacity: .5; cursor: default; }
+#padGrid button.sel { outline: 3px solid var(--gold); outline-offset: 1px; }
+#pad #padGrid button.right { color: #0b2a12; background: #7dff9a; border-color: #1aa845; opacity: 1; }
+#pad #padGrid button.wrong { color: #3a0808; background: #ff8a8a; border-color: #b81414; opacity: 1; }
+#padGrid button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Pause menu and sound panel: full-window overlays with big, thumb-sized buttons */
+.overlay {
+  position: fixed; inset: 0; z-index: 10; box-sizing: border-box; display: grid; place-items: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(7, 5, 26, .78);
+}
+.panel {
+  box-sizing: border-box; width: min(380px, 100%); max-height: 100%; overflow: auto;
+  display: flex; flex-direction: column; gap: 12px; padding: 22px 18px; text-align: center;
+  background: var(--cab); border-radius: 16px;
+  box-shadow: 0 0 0 3px var(--cab-edge), 0 0 0 6px var(--deck-hi), 0 0 50px var(--chad-glow);
+}
+.panel h2 { margin: 0 0 6px; font-size: 22px; font-weight: normal; color: var(--gold); letter-spacing: .08em; text-shadow: 0 3px 0 #000000; }
+.big {
+  font: inherit; font-size: 14px; letter-spacing: .06em; color: var(--label); min-height: 50px; padding: 12px;
+  background: var(--deck-hi); border: 2px solid #4a3d82; border-bottom-width: 5px; border-radius: 9px;
+  cursor: pointer; touch-action: manipulation;
+}
+.big:active { transform: translateY(2px); border-bottom-width: 3px; }
+.big.go { background: var(--shoot); border-color: var(--shoot-lo); }
+.big[aria-pressed="false"] { color: var(--label-dim); }
+.big:focus-visible, .vol input:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.vol { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-size: 11px; color: var(--label-dim); }
+.vol input { width: 100%; height: 34px; margin: 0; accent-color: var(--gold); cursor: pointer; }
+.vol output { min-width: 3.5em; text-align: right; color: var(--label); }
+.panel .note { margin: 0; font-size: 9px; line-height: 1.7; color: var(--label-dim); }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -154,17 +215,46 @@ body {
       <div id="bezel"><canvas id="game" width="640" height="360" role="img" aria-label="Game screen"></canvas></div>
       <canvas id="sideR" class="side" width="24" height="120" aria-hidden="true"></canvas>
     </div>
+    <section id="pad" aria-label="Clue and barrels" hidden>
+      <p id="padHead"></p>
+      <p id="padClue"></p>
+      <div id="padTimer" aria-hidden="true"><span></span></div>
+      <div id="padGrid"></div>
+    </section>
     <div id="deck">
       <div id="stick" aria-hidden="true"><div class="lever"><span class="rod"></span><span class="ball"></span></div></div>
       <button id="shoot" type="button" aria-label="Shoot">SHOOT</button>
       <div id="minis">
-        <button id="btnPause" class="mini" type="button" aria-pressed="false">PAUSE</button>
-        <button id="btnSound" class="mini" type="button" aria-pressed="true">SOUND ON</button>
+        <button id="btnPause" class="mini" type="button" aria-haspopup="dialog">PAUSE</button>
+        <button id="btnSound" class="mini" type="button" aria-haspopup="dialog">SOUND: ON</button>
         <button id="btnFull" class="mini" type="button">FULL SCREEN</button>
       </div>
     </div>
   </main>
   <p id="sr" class="sr-only" aria-live="polite"></p>
+</div>
+
+<div id="pauseMenu" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pmTitle" hidden>
+  <div class="panel">
+    <h2 id="pmTitle">PAUSED</h2>
+    <button id="pmResume" class="big go" type="button">RESUME</button>
+    <button id="pmRetry" class="big" type="button">RETRY</button>
+    <button id="pmSound" class="big" type="button" aria-haspopup="dialog">SOUND</button>
+    <button id="pmQuit" class="big" type="button">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<div id="soundPanel" class="overlay" role="dialog" aria-modal="true" aria-labelledby="spTitle" hidden>
+  <div class="panel">
+    <h2 id="spTitle">SOUND</h2>
+    <button id="spMute" class="big" type="button" aria-pressed="true">SOUND: ON</button>
+    <label class="vol"><span>VOLUME</span><input id="spVol" type="range" min="0" max="100" step="5" value="100"><output id="spVolOut">100%</output></label>
+    <button id="spMusic" class="big" type="button" aria-pressed="true">MUSIC: ON</button>
+    <button id="spFx" class="big" type="button" aria-pressed="true">EFFECTS: ON</button>
+    <button id="spTest" class="big" type="button">PLAY A TEST SOUND</button>
+    <p class="note">NO SOUND ON AN IPHONE OR IPAD? TURN THE VOLUME UP WITH THE SIDE BUTTONS.</p>
+    <button id="spDone" class="big go" type="button">DONE</button>
+  </div>
 </div>
 
 <script>
@@ -181,7 +271,7 @@ const CFG = {
   keysNeeded: 3,                             // keys to unlock the next stage
   bossHits: 3,                               // hits to beat the giant demon octopus
   barrels: { chad: 4, demon: 8, boss: 8 },
-  decideSeconds: 15,                        // time to pick a barrel once the clue is up; shown as a shrinking line, never a number
+  decideSeconds: 20,                        // time to pick a barrel once the clue is up; shown as a shrinking line, never a number
   // Clues are trivia questions about the places on the barrels: see TRIVIA in the trivia section.
 };
 
@@ -402,36 +492,72 @@ const ROWS = {
    ===================================================================== */
 const Sound = (() => {
   let ctx = null, master = null, musicBus = null, sfxBus = null, noiseBuf = null;
-  let muted = false, paused = false;
-  try { muted = localStorage.getItem('cvd-muted') === '1'; } catch (e) { /* storage blocked: default to sound on */ }
+  let muted = false, paused = false, vol = 1, musicOn = true, fxOn = true, warmed = false;
+  try {
+    muted = localStorage.getItem('cvd-muted') === '1';
+    const v = parseFloat(localStorage.getItem('cvd-vol'));
+    if (v >= 0 && v <= 1) vol = v;
+    musicOn = localStorage.getItem('cvd-music') !== '0';
+    fxOn = localStorage.getItem('cvd-fx') !== '0';
+  } catch (e) { /* storage blocked: default to sound on */ }
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } };
+  const masterLevel = () => (muted ? 0 : 0.85 * vol);
+  const ramp = (node, v) => { if (node) node.gain.setTargetAtTime(v, ctx.currentTime, 0.02); };
 
+  // iPhone / iPad: web audio normally obeys the ring/silent switch, so a phone on silent plays nothing.
+  // Asking for the "playback" audio session (iOS 17+), or on older iOS playing a silent looping
+  // <audio> element, moves the page into the media category, where the volume buttons rule instead.
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  let mediaEl = null;
+  function silentWav() {
+    const n = 4000, b = new Uint8Array(44 + n), d = new DataView(b.buffer), s = (o, t) => [...t].forEach((c, i) => (b[o + i] = c.charCodeAt(0)));
+    s(0, 'RIFF'); d.setUint32(4, 36 + n, true); s(8, 'WAVEfmt '); d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
+    d.setUint32(24, 8000, true); d.setUint32(28, 8000, true); d.setUint16(32, 1, true); d.setUint16(34, 8, true); s(36, 'data'); d.setUint32(40, n, true);
+    b.fill(128, 44);
+    return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  }
+  function playbackMode() {
+    try { if (navigator.audioSession) { if (navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; return; } } catch (e) { /* not supported */ }
+    if (!IOS) return;
+    try {
+      if (!mediaEl) { mediaEl = new Audio(silentWav()); mediaEl.loop = true; mediaEl.setAttribute('playsinline', ''); mediaEl.preload = 'auto'; }
+      if (mediaEl.paused && !paused) mediaEl.play().catch(noop);
+    } catch (e) { /* no <audio> support: nothing more we can do */ }
+  }
+
+  // Called from every tap, click and key press: browsers only start sound inside a user gesture.
   function unlock() {
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       try { ctx = new AC(); } catch (e) { ctx = null; return; }
-      master = ctx.createGain(); master.gain.value = muted ? 0 : 0.85;
+      master = ctx.createGain(); master.gain.value = masterLevel();
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -12; comp.knee.value = 10; comp.ratio.value = 4;
       comp.connect(master); master.connect(ctx.destination);
-      musicBus = ctx.createGain(); musicBus.gain.value = 0.3; musicBus.connect(comp);
-      sfxBus = ctx.createGain(); sfxBus.gain.value = 0.75; sfxBus.connect(comp);
+      musicBus = ctx.createGain(); musicBus.gain.value = musicOn ? 0.3 : 0; musicBus.connect(comp);
+      sfxBus = ctx.createGain(); sfxBus.gain.value = fxOn ? 0.75 : 0; sfxBus.connect(comp);
       noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
       const ch = noiseBuf.getChannelData(0);
       for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
     }
-    if (ctx.state === 'suspended' && !paused) ctx.resume().catch(noop);
+    playbackMode();
+    if (!warmed) {   // older iOS only wakes the speaker for a sound started inside the gesture itself
+      try { const s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, 22050); s.connect(ctx.destination); s.start(0); warmed = true; } catch (e) { /* ignore */ }
+    }
+    // 'interrupted' is iOS after a phone call, Siri or switching apps
+    if ((ctx.state === 'suspended' || ctx.state === 'interrupted') && !paused) ctx.resume().catch(noop);
   }
   function setPaused(p) {
     paused = p;
+    if (mediaEl) { if (p) mediaEl.pause(); else mediaEl.play().catch(noop); }
     if (!ctx) return;
     (p ? ctx.suspend() : ctx.resume()).catch(noop);
   }
-  function setMuted(m) {
-    muted = m;
-    try { localStorage.setItem('cvd-muted', m ? '1' : '0'); } catch (e) { /* ignore */ }
-    if (master) master.gain.setTargetAtTime(m ? 0 : 0.85, ctx.currentTime, 0.02);
-  }
+  function setMuted(m) { muted = m; save('cvd-muted', m ? '1' : '0'); ramp(master, masterLevel()); }
+  function setVolume(v) { vol = clamp(v, 0, 1); save('cvd-vol', String(vol)); if (vol > 0 && muted) setMuted(false); else ramp(master, masterLevel()); }
+  function setMusic(on) { musicOn = on; save('cvd-music', on ? '1' : '0'); ramp(musicBus, on ? 0.3 : 0); }
+  function setFx(on) { fxOn = on; save('cvd-fx', on ? '1' : '0'); ramp(sfxBus, on ? 0.75 : 0); }
   function out(bus, pan) {
     if (pan && ctx.createStereoPanner) {
       const p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); p.connect(bus); return p;
@@ -579,8 +705,11 @@ const Sound = (() => {
   }
 
   return {
-    unlock, fx, tone, noise, music, setMuted, setPaused,
+    unlock, fx, tone, noise, music, setMuted, setPaused, setVolume, setMusic, setFx,
     get muted() { return muted; },
+    get volume() { return vol; },
+    get musicOn() { return musicOn; },
+    get fxOn() { return fxOn; },
     get ready() { return !!ctx; },
   };
 })();
@@ -1702,11 +1831,15 @@ function drawBarrel(g, th, cx, bottom, u, b, view) {
   g.restore();
   if (b.label && pop === 1) drawSign(g, th, cx, bottom, u, b);
 }
-function drawSign(g, th, cx, bottom, u, b) {
+// where a barrel's place-name sign sits (also used to make the sign itself tappable)
+function signRect(cx, bottom, u, b) {
   const s = G.uiS, lines = wrapWords(b.label, 9);
   const w = Math.max(...lines.map(l => l.length)) * 6 * s + 4 * s + 2, h = lines.length * 8 * s + 3 * s + 2;
   const tall = 30 * u, frac = b.broken ? 0.8 : b.col % 2 ? 0.72 : 0.25;   // alternate heights so wide signs never collide
-  const x = Math.round(cx - w / 2), y = Math.round(bottom - tall + tall * frac - h / 2);
+  return { x: Math.round(cx - w / 2), y: Math.round(bottom - tall + tall * frac - h / 2), w, h, s, lines };
+}
+function drawSign(g, th, cx, bottom, u, b) {
+  const { x, y, w, h, s, lines } = signRect(cx, bottom, u, b);
   const reveal = G.state === 'RESULT' && b.i === G.target;
   const edge = reveal ? '#ffd24a' : th === 'chad' ? '#6c3a18' : '#ff8a2a';
   g.fillStyle = '#14101f'; g.fillRect(x - 1, y - 1, w + 2, h + 2);
@@ -1717,13 +1850,15 @@ function drawSign(g, th, cx, bottom, u, b) {
 }
 // the question panel: shown while you look for the octopus
 function drawClueBox(g) {
-  const q = G.q; if (!q) return;
+  const q = G.q; if (!q || G.padOn) return;   // on a tall screen the clue is on the answer pad instead
+  // While aiming, drop the heading so the box stays clear of the back row of barrels and their signs.
+  const head = G.state !== 'AIM' ? 1 : 0;
   const s = G.uiS, maxC = Math.floor(600 / (6 * s)) - 2, lines = wrapWords(q.clue, maxC);
-  const h = (lines.length + 1) * 9 * s + 8, y = 32 + 9 * s, x = 14, w = W - 28;   // just under the CREDITS row
+  const h = (lines.length + head) * 9 * s + 8, y = 32 + 9 * s, x = 14, w = W - 28;   // just under the CREDITS row
   g.globalAlpha = 0.86; g.fillStyle = '#0b0816'; g.fillRect(x, y, w, h); g.globalAlpha = 1;
   g.fillStyle = G.mode === 'chad' ? '#3fc4ff' : '#ff5a1a'; g.fillRect(x, y, w, 2); g.fillRect(x, y + h - 2, w, 2);
-  text(g, 'WHERE IS THE OCTOPUS HIDING?', W / 2, y + 4, { s, c: ROWS.gold, al: 'c', o: null });
-  lines.forEach((l, i) => text(g, l, W / 2, y + 4 + (i + 1) * 9 * s, { s, c: '#ffffff', al: 'c', o: null }));
+  if (head) text(g, 'WHERE IS THE OCTOPUS HIDING?', W / 2, y + 4, { s, c: ROWS.gold, al: 'c', o: null });
+  lines.forEach((l, i) => text(g, l, W / 2, y + 4 + (i + head) * 9 * s, { s, c: '#ffffff', al: 'c', o: null }));
   // The decision timer: a line that shrinks to nothing. Deliberately no numbers.
   if ((G.state === 'WATCH' || G.state === 'AIM') && G.deadline != null) {
     const left = clamp((G.deadline - G.time) / CFG.decideSeconds, 0, 1), full = w - 8, lw = Math.round(full * left);
@@ -1735,13 +1870,18 @@ function drawClueBox(g) {
 function sideBarrelPos(b) { return { x: SIDE.cols[b.col], y: b.row ? SIDE.backY : SIDE.frontY }; }
 function fpBarrelPos(b) { const r = b.row ? FP.back : FP.front; return { x: FP.cols[b.col], y: r.y, u: r.u }; }
 function fpBarrelCenter(i) { const p = fpBarrelPos(G.barrels[i]); return { x: p.x, y: p.y - 15 * p.u }; }
-function fpBarrelAt(x, y) {
+// Which barrel a tap or click is on: the barrel itself (with a little slack for fingers) or its sign.
+// Front row first, because it is drawn on top.
+function barrelAt(x, y, posOf, slack) {
   for (const b of [...G.barrels].sort((a, c) => a.row - c.row)) {
-    const p = fpBarrelPos(b);
-    if (Math.abs(x - p.x) <= 13 * p.u && y <= p.y + 2 && y >= p.y - 31 * p.u) return b.i;
+    const p = posOf(b);
+    if (b.label) { const r = signRect(p.x, p.y, p.u, b); if (x >= r.x - 2 && x <= r.x + r.w + 2 && y >= r.y - 2 && y <= r.y + r.h + 2) return b.i; }
+    if (Math.abs(x - p.x) <= 13 * p.u + slack && y <= p.y + 2 + slack && y >= p.y - 31 * p.u - slack) return b.i;
   }
   return -1;
 }
+function fpBarrelAt(x, y, slack = 0) { return barrelAt(x, y, fpBarrelPos, slack); }
+function sideBarrelAt(x, y, slack = 0) { return barrelAt(x, y, b => Object.assign(sideBarrelPos(b), { u: 2 }), slack); }
 function nearestBarrel(x, y) {
   let best = 0, bd = 1e9;
   G.barrels.forEach(b => { const c = fpBarrelCenter(b.i), d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd) { bd = d; best = b.i; } });
@@ -1875,7 +2015,8 @@ const G = {
   hs: null, keyFly: null, nextSlurp: 0, hugAt: null, doneAt: null, inkBlobs: [], hideSpeed: 1,
 };
 const ENTER = {}, UPDATE = {};
-const TITLE_MENU = ['1 PLAYER', 'ONLINE: 2-6 PLAYERS'], TITLE_MENU_Y = [176, 204];
+// Online play only works in the Portal and on claude.ai, so this public copy offers single player only.
+const TITLE_MENU = ['1 PLAYER'], TITLE_MENU_Y = [176];
 function setState(s) { G.state = s; G.st = 0; G.steps = {}; (ENTER[s] || noop)(); }
 function once(k) { if (G.steps[k]) return false; G.steps[k] = true; return true; }
 function announce(msg) { srEl.textContent = msg; }
@@ -2060,18 +2201,28 @@ ENTER.WATCH = () => {
   announce('Clue: ' + G.q.clue.toLowerCase() + '. Barrels: ' + G.q.labels.join(', ').toLowerCase() + '. Press Shoot when you know.');
 };
 ENTER.AIM = () => {
-  G.sel = G.inputMode === 'keys' ? 1 : -1;
+  G.sel = G.inputMode === 'keys' ? 1 : -1; G.autoFire = false;
   if (G.inputMode !== 'mouse') { G.aim.x = W / 2; G.aim.y = 200; }
   Sound.fx.whoosh(); setShootReady(true);
   announce('Aim at a barrel and fire.');
 };
 UPDATE.AIM = dt => {
-  if (G.sel >= 0 && G.inputMode !== 'mouse') {
+  if (G.sel >= 0 && (G.inputMode !== 'mouse' || G.autoFire)) {
     const c = fpBarrelCenter(G.sel), k = 1 - Math.pow(0.0005, dt);
     G.aim.x = lerp(G.aim.x, c.x, k); G.aim.y = lerp(G.aim.y, c.y, k);
   }
+  if (G.autoFire) fire();   // a barrel was picked before the aiming view had finished zooming in
 };
-function fire() { if (G.state === 'AIM' && G.st >= 0.25 && G.sel >= 0) setState('SHOT'); }
+function fire() { if (G.state === 'AIM' && G.st >= 0.25 && G.sel >= 0) { G.autoFire = false; setState('SHOT'); } }
+// Pick a barrel and shoot it, from any way of choosing: tapping it (in either view), the answer pad, or keys 1-8.
+// Picking during the first quarter-second of the aiming view queues the shot instead of dropping it.
+function chooseBarrel(i) {
+  if (G.paused || i < 0 || i >= G.barrels.length) return;
+  if (G.state === 'WATCH') setState('AIM');
+  if (G.state !== 'AIM') return;
+  G.sel = i; G.autoFire = true;
+  fire();
+}
 
 ENTER.SHOT = () => {
   const gun = currentGun(), m = muzzleWorld(gun), c = fpBarrelCenter(G.sel);
@@ -2464,13 +2615,13 @@ function drawTitle(g) {
     });
     const arc = arcTitleLine();
     if (arc) centerHint(g, arc, 236, '#7dff9a');
-    if (Math.floor(t * 2) % 2 === 0) centerHint(g, 'INSERT COIN: CLICK ONE, OR ARROWS AND ENTER', 340, '#c9c2ff');
+    if (Math.floor(t * 2) % 2 === 0) centerHint(g, 'INSERT COIN: TAP, CLICK OR PRESS SHOOT', 214, '#c9c2ff');
   } else {
     const k = clamp(G.st / 0.5, 0, 1), w = Math.max(2, Math.round(28 * Math.abs(Math.cos(G.st * 12))));
     g.drawImage(coinSprite(), Math.round(320 - w / 2), Math.round(lerp(150, 214, easeIn(k))), w, 28);
     if (G.st > 0.45) text(g, "LET'S GO!", W / 2, 186, { s: 3, c: ROWS.gold, al: 'c', sh: '#000000' });
   }
-  if (G.portrait) centerHint(g, 'TURN YOUR PHONE SIDEWAYS FOR A BIGGER SCREEN', 340, '#ffd27a');
+  if (G.portrait && !G.padOn) centerHint(g, 'TURN YOUR PHONE SIDEWAYS FOR A BIGGER SCREEN', 340, '#ffd27a');
 }
 function drawSelect(g) {
   const demon = G.selMode === 'demon', t = G.time;
@@ -2530,7 +2681,8 @@ function drawSide(g) {
   drawHUD(g);
   if (G.state === 'WATCH') {
     drawClueBox(g);
-    centerHint(g, 'PRESS SHOOT!', H - 15 - 16 * G.uiS, ROWS.gold, true);
+    const hint = G.inputMode === 'keys' ? 'SHOOT TO AIM, OR PRESS 1-' + G.barrels.length : G.inputMode === 'touch' ? 'TAP THE BARREL THE OCTOPUS IS IN!' : 'CLICK THE BARREL THE OCTOPUS IS IN!';
+    centerHint(g, hint, H - 15 - 16 * G.uiS, ROWS.gold, true);
   }
 }
 function drawFP(g) {
@@ -2553,7 +2705,7 @@ function drawFP(g) {
   drawHUD(g);
   drawClueBox(g);
   if (G.state === 'AIM') {
-    const hint = G.inputMode === 'touch' ? 'TAP A BARREL, TAP AGAIN TO FIRE' : G.inputMode === 'keys' ? 'ARROWS TO AIM, SPACE TO FIRE' : 'CLICK A BARREL TO FIRE';
+    const hint = G.inputMode === 'touch' ? 'TAP A BARREL TO SHOOT IT' : G.inputMode === 'keys' ? 'ARROWS TO AIM, SPACE TO FIRE' : 'CLICK A BARREL TO FIRE';
     centerHint(g, hint, H - 15 - 16 * G.uiS, '#ffffff');
   }
 }
@@ -2575,9 +2727,7 @@ function drawCrosshair(g, t) {
   g.fillRect(x - 1, y - 1, 2, 2);
 }
 function drawPause(g) {
-  g.globalAlpha = 0.7; g.fillStyle = '#07051a'; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
-  text(g, 'PAUSED', W / 2, 140, { s: 6, c: ROWS.gold, al: 'c', sh: '#000000' });
-  centerHint(g, 'PRESS P, OR TAP, TO KEEP PLAYING', 210, '#ffffff');
+  g.globalAlpha = 0.7; g.fillStyle = '#07051a'; g.fillRect(0, 0, W, H); g.globalAlpha = 1;   // the menu itself is the overlay on top
 }
 function render() {
   const g = ctx;
@@ -3553,9 +3703,10 @@ function arcTitleLine() {
    ===================================================================== */
 function onShoot() {
   Sound.unlock();
-  if (G.paused) { togglePause(false); return; }
+  if (G.paused) { if (G.menu === 'pause') togglePause(false); return; }
   switch (G.state) {
-    case 'TITLE': if (G.menuSel === 1) mpOnlineMenu(); else insertCoin(); break;
+    case 'TITLE': insertCoin(); break;
+    case 'COIN': if (G.st > 0.3) startSelect('chad'); break;
     case 'MP':
       if (MP.ui === 'lobby') mpHostStart();
       else if (MP.S && MP.S.phase === 'end') mpPlayAgain();
@@ -3594,35 +3745,36 @@ cv.addEventListener('pointerdown', e => {
   try { window.focus(); } catch (err) { /* keep keyboard working inside the artifact frame */ }
   Sound.unlock();
   G.inputMode = e.pointerType === 'mouse' ? 'mouse' : 'touch';
-  const p = toGame(e);
+  const p = toGame(e), slack = G.inputMode === 'touch' ? 10 : 0;   // fingers are less exact than a mouse
   if (arcIncomingPointer(p.x, p.y)) return;
-  if (G.paused) { togglePause(false); return; }
+  if (G.paused) return;   // the pause menu or sound panel is open on top
   if (G.state === 'MP') { mpPointer(p.x, p.y); return; }
-  if (G.state === 'TITLE') {
-    const i = TITLE_MENU_Y.findIndex(y => Math.abs(p.y - (y + 9)) < 11 && Math.abs(p.x - W / 2) < 170);
-    if (i >= 0) { G.menuSel = i; onShoot(); }
-    return;
-  }
   if (G.state === 'SELECT') {
     const i = heroAt(p.x, p.y);
     if (i >= 0 && !G.chosen) chooseHero(i);
     return;
   }
+  // Clue on screen: tapping a barrel (or its sign) shoots it straight away. Anywhere else goes to the aiming view.
+  if (G.state === 'WATCH') {
+    const i = sideBarrelAt(p.x, p.y, slack);
+    if (i >= 0) { chooseBarrel(i); return; }
+  }
   if (G.state === 'AIM') {
-    const i = fpBarrelAt(p.x, p.y);
     G.aim.x = p.x; G.aim.y = p.y;
-    if (i < 0) return;
-    if (G.inputMode === 'mouse' || G.sel === i) { G.sel = i; fire(); }
-    else { G.sel = i; Sound.fx.blip(); }
+    const i = fpBarrelAt(p.x, p.y, slack);
+    if (i >= 0) { chooseBarrel(i); return; }
+    // A near miss on a phone: highlight the closest barrel; tapping it (or SHOOT) fires.
+    const n = nearestBarrel(p.x, p.y), c = fpBarrelCenter(n);
+    if (Math.hypot(c.x - p.x, c.y - p.y) < 80) { G.sel = n; Sound.fx.blip(); }
     return;
   }
-  onShoot();
+  onShoot();   // title (anywhere starts), intro skip, game over, and the rest
 });
 cv.addEventListener('pointermove', e => {
   if (e.pointerType !== 'mouse') return;
   const p = toGame(e);
   G.inputMode = 'mouse';
-  if (G.state === 'AIM') { G.aim.x = p.x; G.aim.y = p.y; G.sel = fpBarrelAt(p.x, p.y); }
+  if (G.state === 'AIM' && !G.autoFire) { G.aim.x = p.x; G.aim.y = p.y; G.sel = fpBarrelAt(p.x, p.y); }
   else if (G.state === 'SELECT' && !G.chosen) { const i = heroAt(p.x, p.y); if (i >= 0 && i !== G.heroSel) { G.heroSel = i; Sound.fx.blip(); } }
 });
 cv.addEventListener('contextmenu', e => e.preventDefault());
@@ -3642,7 +3794,13 @@ addEventListener('keydown', e => {
   // In the Portal, Escape closes the arcade like every other arcade game (P still pauses).
   // The iframe keeps the key, so the arcade window only hears it if we pass it on.
   if (k === 'Escape' && MP.inPortal) { e.preventDefault(); mpPost({ cvd: 'close' }); return; }
+  if (G.menu) {   // pause menu or sound panel open: Escape / P go back, everything else belongs to its buttons
+    if (k === 'Escape' || k === 'p' || k === 'P') { e.preventDefault(); if (G.menu === 'sound') closeSound(); else togglePause(false); }
+    else if ((k === 'm' || k === 'M') && !e.repeat) toggleMute();
+    return;
+  }
   if (!e.repeat && !onButton && arcIncomingKey(k)) { e.preventDefault(); return; }
+  if (/^[1-8]$/.test(k) && !e.repeat && (G.state === 'WATCH' || G.state === 'AIM')) { e.preventDefault(); G.inputMode = 'keys'; chooseBarrel(+k - 1); return; }
   if (G.state === 'MP' && !onButton && k !== 'p' && k !== 'P' && k !== 'm' && k !== 'M' && !e.repeat && mpKey(k)) { e.preventDefault(); return; }
   if (k === ' ' || k === 'Enter') {
     if (onButton) return;                 // let focused buttons do their own thing
@@ -3657,21 +3815,69 @@ addEventListener('keydown', e => {
   if (dir) { e.preventDefault(); G.inputMode = 'keys'; nav(dir[0], dir[1]); tiltStick(dir[0], dir[1]); }
 });
 
+/* ---------- pause menu and sound panel ---------- */
+// G.menu is null (playing), 'pause' or 'sound'. Either one pauses the game, so the clue timer stops too.
+// The pause menu also silences everything; the sound panel keeps the music going so you can hear your changes.
+const pauseMenu = document.getElementById('pauseMenu'), soundPanel = document.getElementById('soundPanel');
+const $ = id => document.getElementById(id);
+const pmRetry = $('pmRetry'), spMute = $('spMute'), spVol = $('spVol'), spVolOut = $('spVolOut'), spMusic = $('spMusic'), spFx = $('spFx');
+const IN_GAME = () => !['TITLE', 'COIN', 'SELECT', 'MP'].includes(G.state);
+function setMenu(m, focusId) {
+  G.menu = m; G.paused = !!m;
+  pauseMenu.hidden = m !== 'pause'; soundPanel.hidden = m !== 'sound';
+  Sound.setPaused(m === 'pause');
+  pmRetry.hidden = !IN_GAME();
+  if (m === 'sound') syncSoundPanel();
+  if (m) { const f = $(focusId || (m === 'pause' ? 'pmResume' : 'spDone')); if (f) f.focus({ preventScroll: true }); }
+  else if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  announce(m === 'pause' ? 'Paused.' : m === 'sound' ? 'Sound settings.' : 'Playing.');
+}
 function togglePause(force) {
   const p = force != null ? force : !G.paused;
-  if (p === G.paused) return;
-  G.paused = p; Sound.setPaused(p);
-  btnPause.setAttribute('aria-pressed', String(p)); btnPause.textContent = p ? 'RESUME' : 'PAUSE';
-  announce(p ? 'Paused.' : 'Playing.');
+  if (p) { if (G.menu !== 'pause') setMenu('pause'); } else if (G.menu) setMenu(null);
+}
+let soundFrom = null;   // where DONE goes back to: the pause menu, or straight back into the game
+function openSound(from) { soundFrom = from; setMenu('sound'); }
+function closeSound() { setMenu(soundFrom === 'pause' ? 'pause' : null, soundFrom === 'pause' ? 'pmSound' : null); }
+// Start this stage again from its first question, with full credits and the same hero.
+function retryStage() {
+  const mode = G.mode === 'boss' ? 'demon' : G.mode;
+  if (!IN_GAME() || !HEROES[mode].includes(G.hero)) return;   // nothing to retry yet (title or hero select)
+  setMenu(null);
+  Object.assign(G, { coins: CFG.coins, bossHits: 0, banners: [], bubbles: [], keyFly: null, shot: null, testShot: null, prize: null, captives: [], deadline: null, autoFire: false, timedOut: false });
+  G.octo.vis = false; parts.length = 0; FX.shake = 0; FX.flashA = 0;
+  Sound.music(mode === 'chad' ? 'chad' : 'demon');
+  beginMode(mode, G.hero);
+  announce('Starting ' + (mode === 'chad' ? 'Chad Mode' : 'Demon Time') + ' again.');
 }
 function toggleMute() {
   Sound.unlock();
   Sound.setMuted(!Sound.muted);
   syncSoundButton();
 }
-function syncSoundButton() { btnSound.setAttribute('aria-pressed', String(!Sound.muted)); btnSound.textContent = Sound.muted ? 'SOUND OFF' : 'SOUND ON'; }
+function syncSoundButton() { btnSound.textContent = Sound.muted ? 'SOUND: OFF' : 'SOUND: ON'; syncSoundPanel(); }
+function syncSoundPanel() {
+  const on = (btn, v, label) => { btn.setAttribute('aria-pressed', String(v)); btn.textContent = label + (v ? ': ON' : ': OFF'); };
+  on(spMute, !Sound.muted, 'SOUND'); on(spMusic, Sound.musicOn, 'MUSIC'); on(spFx, Sound.fxOn, 'EFFECTS');
+  const pct = Math.round(Sound.volume * 100);
+  spVol.value = String(pct); spVolOut.textContent = pct + '%';
+}
 btnPause.addEventListener('click', () => togglePause());
-btnSound.addEventListener('click', toggleMute);
+btnSound.addEventListener('click', () => { Sound.unlock(); openSound(null); });
+$('pmResume').addEventListener('click', () => togglePause(false));
+pmRetry.addEventListener('click', retryStage);
+$('pmSound').addEventListener('click', () => openSound('pause'));
+$('pmQuit').addEventListener('click', () => { setMenu(null); setState('TITLE'); });
+spMute.addEventListener('click', toggleMute);
+spVol.addEventListener('input', () => { Sound.unlock(); Sound.setVolume(+spVol.value / 100); syncSoundButton(); });
+spMusic.addEventListener('click', () => { Sound.setMusic(!Sound.musicOn); syncSoundPanel(); });
+spFx.addEventListener('click', () => { Sound.setFx(!Sound.fxOn); syncSoundPanel(); if (Sound.fxOn) Sound.fx.coin(); });
+$('spTest').addEventListener('click', () => { Sound.unlock(); Sound.fx.coin(); Sound.fx.select(); });
+$('spDone').addEventListener('click', closeSound);
+// a tap on the dark backdrop around a panel closes it, like the DONE / RESUME button
+[pauseMenu, soundPanel].forEach(el => el.addEventListener('click', e => { if (e.target === el) { if (G.menu === 'sound') closeSound(); else togglePause(false); } }));
+// Browsers only allow sound to start inside a tap, click or key press: wake it on every one (iPhone needs the touchend).
+['touchend', 'pointerup', 'click', 'keydown'].forEach(t => document.addEventListener(t, () => Sound.unlock(), { capture: true, passive: true }));
 btnFull.hidden = !(document.fullscreenEnabled && document.documentElement.requestFullscreen);
 btnFull.addEventListener('click', () => {
   try {
@@ -3683,6 +3889,59 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && !['
 
 /* ---------- fit the cabinet to the window ---------- */
 const room = document.getElementById('room'), cab = document.getElementById('cab');
+
+/* ---------- the answer pad (tall screens): the clue in readable text and one big button per barrel ---------- */
+const padEl = $('pad'), padHead = $('padHead'), padClue = $('padClue'), padTimer = $('padTimer'), padBar = padTimer.firstElementChild, padGrid = $('padGrid');
+const PAD_MSG = {
+  TITLE: 'PRESS SHOOT, OR TAP THE SCREEN, TO PLAY', COIN: "LET'S GO!", SELECT: 'TAP A HERO ON THE SCREEN TO START',
+  INTRO: 'THE OCTOPUS HAS GRABBED A HOSTAGE!', HIDE: 'IT IS HIDING IN ONE OF THE BARRELS...', NEWGUN: 'NEW GUN!',
+  UNLOCK: 'STAGE CLEAR!', BOSSINTRO: 'HERE COMES THE BOSS!', GAMEOVER: 'GAME OVER. PRESS SHOOT TO PLAY AGAIN', VICTORY: 'YOU WIN!',
+};
+let padGridKey = '';
+function setText(el, s) { if (el.textContent !== s) el.textContent = s; }
+function syncPad() {
+  if (!G.padOn) return;
+  padEl.classList.toggle('demon', G.mode !== 'chad' && G.state !== 'TITLE' && G.state !== 'COIN');
+  const live = G.state === 'WATCH' || G.state === 'AIM';
+  const showQ = !!G.q && G.barrels.some(b => b.label) && ['HIDE', 'WATCH', 'AIM', 'SHOT', 'RESULT'].includes(G.state);
+  // heading and clue
+  if (showQ && G.state === 'RESULT') {
+    const ans = G.q.answer;
+    setText(padHead, G.lastResult === 'hit' ? 'GOT IT! IT WAS ' + ans : G.timedOut ? 'TOO SLOW! IT WAS ' + ans : 'WRONG BARREL! IT WAS ' + ans);
+  } else setText(padHead, showQ ? (live ? 'WHERE IS THE OCTOPUS HIDING?' : G.state === 'SHOT' ? 'FIRE!' : 'GET READY...') : PAD_MSG[G.state] || '');
+  const stats = IN_GAME() && G.state !== 'VICTORY' ? 'KEYS ' + G.keys + '/' + CFG.keysNeeded + '   CREDITS ' + G.coins : '';
+  setText(padClue, showQ ? G.q.clue : G.mode === 'boss' ? 'HITS ' + G.bossHits + '/' + CFG.bossHits + '   CREDITS ' + G.coins : stats);
+  // the shrinking timer line (same colours as the one on screen)
+  const left = live && G.deadline != null ? clamp((G.deadline - G.time) / CFG.decideSeconds, 0, 1) : 0;
+  padTimer.style.visibility = live ? 'visible' : 'hidden';
+  if (live) {
+    padBar.style.width = (left * 100).toFixed(1) + '%';
+    padBar.style.background = left > 0.5 ? '#7dff9a' : left > 0.25 ? '#ffb02e' : Math.floor(G.time * 6) % 2 ? '#ff3b3b' : '#ff8a8a';
+  }
+  // the barrel buttons, laid out like the barrels in the aiming view: back row on top
+  padGrid.hidden = !showQ;
+  if (!showQ) { padGridKey = ''; return; }
+  const order = [...G.barrels].sort((a, b) => b.row - a.row || a.col - b.col);
+  const key = G.mode + '|' + order.map(b => b.label).join('|');
+  if (key !== padGridKey) {
+    padGridKey = key;
+    padGrid.replaceChildren(...order.map(b => {
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.textContent = b.label; btn.dataset.i = b.i;
+      btn.setAttribute('aria-label', 'Shoot the ' + b.label.toLowerCase() + ' barrel');
+      btn.addEventListener('click', e => { if (e.pointerType === 'mouse') G.inputMode = 'mouse'; else if (G.inputMode !== 'keys') G.inputMode = 'touch'; chooseBarrel(b.i); });
+      return btn;
+    }));
+  }
+  const result = G.state === 'RESULT';
+  for (const btn of padGrid.children) {
+    const i = +btn.dataset.i;
+    btn.disabled = !live;
+    btn.classList.toggle('sel', G.state !== 'RESULT' && i === G.sel);
+    btn.classList.toggle('right', result && i === G.target);
+    btn.classList.toggle('wrong', result && !G.timedOut && i === G.sel && i !== G.target);
+  }
+}
 const mqC = document.getElementById('mq'), sideL = document.getElementById('sideL'), sideR = document.getElementById('sideR');
 function layout() {
   const cs = getComputedStyle(room);
@@ -3702,6 +3961,8 @@ function layout() {
     sidew = aw >= 880 ? clamp(Math.round(aw * 0.045), 34, 72) : 0;
     mqh = clamp(Math.round(ah * 0.08), 30, 84);
     deckh = portrait ? clamp(Math.round(ah * 0.2), 110, 210) : clamp(Math.round(ah * 0.16), 88, 150);
+    // A shorter phone held upright: the answer pad needs the room more than the marquee does.
+    if (portrait && aw < 520 && ah < 760) { mqh = 0; deckh = clamp(Math.round(ah * 0.17), 96, 130); }
     const maxW = aw - 2 * pad - 2 * bez - (sidew ? 2 * (sidew + gap) : 0);
     const maxH = ah - 2 * pad - 2 * bez - mqh - deckh - 2 * gap;
     sw = Math.floor(Math.min(maxW, maxH * 16 / 9));
@@ -3710,14 +3971,24 @@ function layout() {
   }
   sw = Math.max(160, sw);
   const sh = Math.round(sw * 9 / 16), st = document.documentElement.style;
+  // Upright phone or tablet: the screen is limited by the width, which leaves room underneath for the answer pad.
+  const spare = compact ? 0 : ah - 2 * pad - 2 * bez - mqh - deckh - 3 * gap - sh;
+  const padH = spare >= 140 && ah > aw * 1.05 ? Math.min(spare, 360) : 0;
+  st.setProperty('--pad-h', padH + 'px');
+  st.setProperty('--pad-cols', deckw < 520 ? '2' : '4');   // a phone gets two wide buttons per row, a tablet four
+  padEl.hidden = !padH; cab.classList.toggle('padded', !!padH);
+  G.padOn = !!padH;
   st.setProperty('--screen-w', sw + 'px'); st.setProperty('--screen-h', sh + 'px');
   st.setProperty('--mq-h', mqh + 'px'); st.setProperty('--deck-h', deckh + 'px'); st.setProperty('--deck-w', deckw + 'px');
   st.setProperty('--side-w', sidew + 'px'); st.setProperty('--gap', gap + 'px'); st.setProperty('--cab-pad', pad + 'px');
   st.setProperty('--bezel-pad', bez + 'px'); st.setProperty('--shoot-size', shoot + 'px');
   cab.classList.toggle('compact', compact);
+  cab.classList.toggle('nomq', !compact && !mqh);
   cab.classList.toggle('narrow', !compact && deckw < 440);
   sideL.hidden = sideR.hidden = !sidew;
-  G.uiS = sw < 560 ? 2 : 1;
+  // Phones and tablets get the big text: the small size is unreadable on a phone and tiny on an iPad held sideways.
+  const touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  G.uiS = sw < (touch ? 1100 : 760) ? 2 : 1;
   G.portrait = !compact && ah > aw && aw < 700;
   requestAnimationFrame(() => { drawMarquee(); drawSideArt(); });
 }
@@ -3763,6 +4034,7 @@ function frame(now) {
   last = now;
   if (!G.paused) update(dt);
   render();
+  syncPad();
   mqT += dt;
   if (Math.floor(mqT * 6) !== Math.floor((mqT - dt) * 6)) drawMarquee();
   requestAnimationFrame(frame);
@@ -3775,7 +4047,8 @@ function start(data) {
   arcBoot();
   requestAnimationFrame(t => { last = t; frame(t); });
 }
-window.__cvd = { G, setState, CFG };   // handy for testing in the browser console
+// handy for testing in the browser console; step(dt) runs one frame by hand (the loop stops in a hidden tab)
+window.__cvd = { G, setState, CFG, onShoot, chooseBarrel, retryStage, step(dt = 1 / 60) { if (!G.paused) update(dt); render(); syncPad(); } };
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ muted: Sound.muted }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start);
 else start((window.claude && window.claude.hot && window.claude.hot.data) || {});
